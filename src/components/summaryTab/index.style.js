@@ -1,15 +1,13 @@
 import styled from "styled-components";
 
-const HomeWrapper = styled.div`
+const Wrapper = styled.div`
   .ant-home-header-container {
     margin: 0px;
     background: white;
     border: 1px solid rgb(235, 237, 240);
-    padding-bottom: 50px;
   }
   .ant-home-content-container {
     margin: 24px;
-    margin-top: -45.5px;
   }
   .ant-panel-container {
     margin-top: 24px;
@@ -17,4 +15,4 @@ const HomeWrapper = styled.div`
   }
 `;
 
-export default HomeWrapper;
+export default Wrapper;
