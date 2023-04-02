@@ -5,19 +5,19 @@ import ContainerDimensions from "react-container-dimensions";
 import handleViewport from "react-in-viewport";
 import { Card, Space, Tooltip, Button, message, Row, Col } from "antd";
 import { withTranslation } from "react-i18next";
-import { TbChartAreaLineFilled } from "react-icons/tb";
+import { TbChartCandleFilled } from "react-icons/tb";
 import { AiOutlineDownload } from "react-icons/ai";
 import { downloadCanvasAsPng, transitionStyle } from "../../helpers/utility";
 import * as htmlToImage from "html-to-image";
 import Wrapper from "./index.style";
-import RidgelinePlot from "../ridgelinePlot";
+import ViolinPlot from "../violinPlot";
 
 const margins = {
   padding: 0,
   gap: 0,
 };
 
-class RidgelinePlotPanel extends Component {
+class ViolinPlotPanel extends Component {
   container = null;
 
   onDownloadButtonClicked = () => {
@@ -54,10 +54,10 @@ class RidgelinePlotPanel extends Component {
           title={
             <Space>
               <span role="img" className="anticon anticon-dashboard">
-                <TbChartAreaLineFilled />
+                <TbChartCandleFilled />
               </span>
               <span className="ant-pro-menu-item-title">
-                {title || t("components.ridgeline-panel.title")}
+                {title || t("components.violin-panel.title")}
               </span>
             </Space>
           }
@@ -87,7 +87,7 @@ class RidgelinePlotPanel extends Component {
                     (inViewport || renderOutsideViewPort) && (
                       <Row style={{ width }} gutter={[margins.gap, 0]}>
                         <Col flex={1}>
-                          <RidgelinePlot
+                          <ViolinPlot
                             {...{
                               width,
                               height,
@@ -108,12 +108,12 @@ class RidgelinePlotPanel extends Component {
     );
   }
 }
-RidgelinePlotPanel.propTypes = {
+ViolinPlotPanel.propTypes = {
   data: PropTypes.array,
   markValue: PropTypes.number,
   visible: PropTypes.bool,
 };
-RidgelinePlotPanel.defaultProps = {
+ViolinPlotPanel.defaultProps = {
   data: [],
   visible: true,
 };
@@ -126,6 +126,6 @@ export default connect(
   mapDispatchToProps
 )(
   withTranslation("common")(
-    handleViewport(RidgelinePlotPanel, { rootMargin: "-1.0px" })
+    handleViewport(ViolinPlotPanel, { rootMargin: "-1.0px" })
   )
 );
