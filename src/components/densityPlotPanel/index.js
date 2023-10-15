@@ -6,18 +6,18 @@ import handleViewport from "react-in-viewport";
 import { Card, Space, Tooltip, Button, message, Row, Col } from "antd";
 import { withTranslation } from "react-i18next";
 import { AiOutlineDownload } from "react-icons/ai";
-import { TbChartHistogram } from "react-icons/tb";
+import { GiBubbles } from "react-icons/gi";
 import { downloadCanvasAsPng, transitionStyle } from "../../helpers/utility";
 import * as htmlToImage from "html-to-image";
 import Wrapper from "./index.style";
-import HistogramPlot from "../histogramPlot";
+import DensityPlot from "../densityPlot";
 
 const margins = {
   padding: 0,
   gap: 0,
 };
 
-class HistogramPlotPanel extends Component {
+class DensityPlotPanel extends Component {
   container = null;
 
   onDownloadButtonClicked = () => {
@@ -38,13 +38,15 @@ class HistogramPlotPanel extends Component {
     const {
       t,
       loading,
-      data,
-      q1,
-      q3,
-      q99,
-      markValue,
-      markValueText,
-      colorMarker,
+      dataPoints,
+      xTitle,
+      xVariable,
+      xRange,
+      xFormat,
+      yTitle,
+      yVariable,
+      yRange,
+      yFormat,
       title,
       inViewport,
       renderOutsideViewPort,
@@ -60,7 +62,7 @@ class HistogramPlotPanel extends Component {
           title={
             <Space>
               <span role="img" className="anticon anticon-dashboard">
-                <TbChartHistogram />
+                <GiBubbles />
               </span>
               <span className="ant-pro-menu-item-title">{title}</span>
             </Space>
@@ -91,17 +93,19 @@ class HistogramPlotPanel extends Component {
                     (inViewport || renderOutsideViewPort) && (
                       <Row style={{ width }} gutter={[margins.gap, 0]}>
                         <Col flex={1}>
-                          <HistogramPlot
+                          <DensityPlot
                             {...{
                               width,
                               height,
-                              data,
-                              q1,
-                              q3,
-                              q99,
-                              markValue,
-                              markValueText,
-                              colorMarker,
+                              dataPoints,
+                              xTitle,
+                              xVariable,
+                              xFormat,
+                              yTitle,
+                              yVariable,
+                              yFormat,
+                              xRange,
+                              yRange,
                             }}
                           />
                         </Col>
@@ -117,12 +121,9 @@ class HistogramPlotPanel extends Component {
     );
   }
 }
-HistogramPlotPanel.propTypes = {
-  data: PropTypes.array,
-  markValue: PropTypes.number,
-};
-HistogramPlotPanel.defaultProps = {
-  data: [],
+DensityPlotPanel.propTypes = {};
+DensityPlotPanel.defaultProps = {
+  visible: true,
 };
 const mapDispatchToProps = () => ({});
 const mapStateToProps = (state) => ({
@@ -133,6 +134,6 @@ export default connect(
   mapDispatchToProps
 )(
   withTranslation("common")(
-    handleViewport(HistogramPlotPanel, { rootMargin: "-1.0px" })
+    handleViewport(DensityPlotPanel, { rootMargin: "-1.0px" })
   )
 );
