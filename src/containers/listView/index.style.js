@@ -1,6 +1,6 @@
 import styled from "styled-components";
 
-const HomeWrapper = styled.div`
+const Wrapper = styled.div`
   .ant-home-header-container {
     margin: 0px;
     background: white;
@@ -27,4 +27,4 @@ const HomeWrapper = styled.div`
   }
 `;
 
-export default HomeWrapper;
+export default Wrapper;
