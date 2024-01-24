@@ -4,27 +4,29 @@ const Wrapper = styled.div`
   .ant-wrapper {
     background: white;
     padding: 0px;
-    min-height: ${(props) => props.height}px !important;
   }
-  div.scatterplot canvas {
+  div.genome-plot canvas {
     margin: ${(props) => props.margins.gapY}px
       ${(props) => props.margins.gapX}px !important;
     padding: 0px !important;
+    pointer-events: auto;
   }
   svg.plot-container {
     position: absolute;
     top: 0px;
-    user-select: none;
-  }
-  line.hovered-location-line {
-    stroke: rgb(255, 127, 14);
-    stroke-width: 1.33px;
-    stroke-dasharray: 5, 5;
-  }
-  text.hovered-location-text {
-    fill: rgb(255, 127, 14);
-    font-size: 10px;
-    user-select: none;
+    pointer-events: auto;
+    g.labels-container {
+      text {
+        user-select: none;
+        cursor: pointer;
+      }
+      text:hover {
+        font-weight: bold;
+      }
+    }
+    .weighted {
+      fill: #cf2908;
+    }
   }
 `;
 
