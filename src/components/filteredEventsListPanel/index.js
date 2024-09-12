@@ -122,6 +122,59 @@ class FilteredEventsListPanel extends Component {
         onFilter: (value, record) => record.tier === value,
       },
       {
+        title: t("components.filtered-events-panel.oncokb_cancer_types"),
+        dataIndex: "oncokb_cancer_types",
+        key: "oncokb_cancer_types",
+        filters: [...new Set(filteredEvents.map((d) => d.oncokb_cancer_types))].map((d) => {
+          return {
+            text: d,
+            value: d,
+          };
+        }),
+        filterMultiple: false,
+        onFilter: (value, record) => record.oncokb_cancer_types === value,
+      },
+      {
+        title: t("components.filtered-events-panel.oncokb_tier"),
+        dataIndex: "oncokb_tier",
+        key: "oncokb_tier",
+        sorter: (a, b) => a.oncokb_tier - b.oncokb_tier,
+        filters: [...new Set(filteredEvents.map((d) => d.oncokb_tier))].map((d) => {
+          return {
+            text: d,
+            value: d,
+          };
+        }),
+        filterMultiple: false,
+        onFilter: (value, record) => record.oncokb_tier === value,
+      },
+      {
+        title: t("components.filtered-events-panel.oncokb_alterations"),
+        dataIndex: "oncokb_alterations",
+        key: "oncokb_alterations",
+        filters: [...new Set(filteredEvents.map((d) => d.oncokb_alterations))].map((d) => {
+          return {
+            text: d,
+            value: d,
+          };
+        }),
+        filterMultiple: false,
+        onFilter: (value, record) => record.oncokb_alterations === value,
+      },
+      {
+        title: t("components.filtered-events-panel.oncokb_drugs"),
+        dataIndex: "oncokb_drugs",
+        key: "oncokb_drugs",
+        filters: [...new Set(filteredEvents.map((d) => d.oncokb_drugs))].map((d) => {
+          return {
+            text: d,
+            value: d,
+          };
+        }),
+        filterMultiple: false,
+        onFilter: (value, record) => record.oncokb_drugs === value,
+      },
+      {
         title: t("components.filtered-events-panel.location"),
         dataIndex: "location",
         key: "location",
