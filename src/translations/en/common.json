@@ -22,7 +22,8 @@
     "count": "Count",
     "density": "Density",
     "mutation": "<strong>{{count}}</strong>mutation in total",
-    "mutation_plural": "<strong>{{count}}</strong> mutations in total"
+    "mutation_plural": "<strong>{{count}}</strong> mutations in total",
+    "not-applicable": "NA"
   },
   "topbar": {
     "report": "<strong>{{count}}</strong> case report in total",
@@ -364,13 +365,13 @@
       "genome-y-axis-title": "↑ CN",
       "coverage-plot": "Denoised Coverage",
       "hetsnp-plot": "Heterozygous SNPs",
-      "hetsnp-plot-y-axis-title": "↑ Raw Count",
+      "hetsnp-plot-y-axis-title": "↑ Count",
       "mutations-plot": "Mutations Multiplicity",
       "mutations-plot-y-axis-title": "↑ Est. Copies",
       "allelic-plot": "Allelic CN Graph",
       "allelic-plot-y-axis-title": "↑ CN",
-      "coverage-y-axis-title": "↑ Foreground",
-      "coverage-y-axis2-title": "Est. Absolute CN ↑"
+      "coverage-y-axis-title": "↑ Base Coverage",
+      "coverage-y-axis2-title": "Est. CN ↑"
     }
   },
   "tabs": {

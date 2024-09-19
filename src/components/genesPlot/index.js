@@ -346,7 +346,7 @@ class GenesPlot extends Component {
   render() {
     const { width, height, genes, defaultDomain, domains } = this.props;
     const { tooltip } = this.state;
-    console.log(genes, domains);
+
     let stageWidth = width - 2 * margins.gapX;
     let stageHeight = height - 3 * margins.gapY;
 
@@ -382,8 +382,6 @@ class GenesPlot extends Component {
                 key={d.iid}
                 x={xPos}
                 y={yPos}
-                endPos={xPos + textLength}
-                strand={this.genesStrand[i]}
                 dy={-10}
                 fontFamily="Arial"
                 fontSize={10}
