@@ -1,12 +1,12 @@
 import styled from "styled-components";
 
 const Wrapper = styled.div`
-  .ant-wrapper-genes {
+  .ant-wrapper-cytobands {
     background: transparent;
     padding: 0px;
     min-height: 70px;
   }
-  svg.plot-container-genes {
+  svg.plot-container-cytobands {
     position: relative;
     user-select: none;
   }
@@ -22,12 +22,20 @@ const Wrapper = styled.div`
   }
   .highlighted {
     font-weight: bold;
-    fill: #ff7f0e !important;
+    fill: #b3590a !important;
   }
   .rect-highlighted {
     font-weight: bold;
-    fill: #ff7f0e !important;
     stroke: #b3590a !important;
+    stroke-width: 3px;
+  }
+  .tooltip {
+    pointer-events: none;
+    user-select: none;
+  }
+  .cytoband text {
+    user-select: none;
+    pointer-events: none;
   }
 `;
 

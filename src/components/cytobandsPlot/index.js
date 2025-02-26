@@ -3,7 +3,7 @@ import { PropTypes } from "prop-types";
 import * as d3 from "d3";
 import { connect } from "react-redux";
 import { withTranslation } from "react-i18next";
-import { filterGenesByOverlap, measureText } from "../../helpers/utility";
+import { measureText } from "../../helpers/utility";
 import Wrapper from "./index.style";
 import debounce from "lodash.debounce";
 import settingsActions from "../../redux/settings/actions";
@@ -18,14 +18,14 @@ const margins = {
   yTicksCount: 10,
 };
 
-class GenesPlot extends Component {
+class CytobandsPlot extends Component {
   plotContainer = null;
 
   constructor(props) {
     super(props);
 
     this.state = {
-      selectedGene: null,
+      selectedCytoband: null,
       tooltip: {
         visible: false,
         shapeId: -1,
@@ -40,9 +40,12 @@ class GenesPlot extends Component {
   shouldComponentUpdate(nextProps, nextState) {
     return (
       nextProps.domains.toString() !== this.props.domains.toString() ||
-      nextProps.genesList.toString() !== this.props.genesList.toString() ||
+      nextProps.cytobands.toString() !== this.props.cytobands.toString() ||
       nextProps.width !== this.props.width ||
       nextProps.height !== this.props.height ||
+      nextState.selectedCytoband?.id !== this.state.selectedCytoband?.id ||
+      nextState.tooltip.x !== this.state.tooltip.x ||
+      nextState.tooltip.y !== this.state.tooltip.y ||
       nextProps.hoveredLocation !== this.props.hoveredLocation ||
       nextProps.hoveredLocationPanelIndex !==
         this.props.hoveredLocationPanelIndex
@@ -211,42 +214,25 @@ class GenesPlot extends Component {
     this.props.updateHoveredLocation(null, panelIndex);
   };
 
-  tooltipContent(gene) {
+  tooltipContent(cytoband) {
     let attributes = [
-      { label: "id", value: gene.id },
-      { label: "Title", value: gene.title },
-      { label: "Type", value: gene.bioType },
-      { label: "Description", value: gene.description },
+      { label: "Title", value: cytoband.title },
+      { label: "Chromosome", value: cytoband.chromosomeTitle },
+      { label: "Description", value: cytoband.description },
       {
         label: "Locus",
-        value: `chr${gene.chromosome}: ${d3.format(",")(
-          gene.startPoint
-        )} - ${d3.format(",")(gene.endPoint)}`,
+        value: `${cytoband.chromosomeTitle}: ${d3.format(",")(
+          cytoband.startPoint
+        )} - ${d3.format(",")(cytoband.endPoint)}`,
       },
-      {
-        label: "CDS Locus",
-        value: `chr${gene.chromosome}: ${d3.format(",")(
-          gene.cdsStartPoint
-        )} - ${d3.format(",")(gene.cdsEndPoint)}`,
-      },
-      { label: "Strand", value: gene.strand },
     ];
     return attributes;
   }
 
-  handleTitleClick = (selectedGene) => {
-    window
-      .open(
-        `https://www.genecards.org/cgi-bin/carddisp.pl?gene=${selectedGene.title}`,
-        "_blank"
-      )
-      .focus();
-  };
-
-  handleGeneMouseMove = (event, selectedGene) => {
+  handleCytobandMouseMove = (event, selectedCytoband) => {
     const { width, height } = this.props;
 
-    let textData = this.tooltipContent(selectedGene);
+    let textData = this.tooltipContent(selectedCytoband);
     let diffY = d3.min([
       0,
       height - event.nativeEvent.offsetY - textData.length * 16 - 12,
@@ -259,10 +245,10 @@ class GenesPlot extends Component {
         60,
     ]);
     this.setState({
-      selectedGene,
+      selectedCytoband,
       tooltip: {
-        shape: selectedGene,
-        shapeId: selectedGene.id,
+        shape: selectedCytoband,
+        shapeId: selectedCytoband.id,
         visible: true,
         x: event.nativeEvent.offsetX + diffX,
         y: event.nativeEvent.offsetY + diffY,
@@ -271,16 +257,16 @@ class GenesPlot extends Component {
     });
   };
 
-  handleGeneMouseOut = () => {
+  handleCytobandMouseOut = () => {
     this.setState({
-      selectedGene: null,
+      selectedCytoband: null,
       tooltip: { shape: null, shapeId: null, visible: false },
     });
   };
 
   render() {
-    const { width, height, domains, genesList, defaultDomain } = this.props;
-    const { tooltip, selectedGene } = this.state;
+    const { width, height, domains, defaultDomain, cytobands } = this.props;
+    const { tooltip, selectedCytoband } = this.state;
 
     let stageWidth = width - 2 * margins.gapX;
     let stageHeight = height - 2 * margins.gapY;
@@ -291,22 +277,24 @@ class GenesPlot extends Component {
     this.panels = [];
 
     domains.forEach((xDomain, index) => {
-      let dataGenes = [];
+      let dataCytobands = [];
       let xScale = d3.scaleLinear().domain(xDomain).range([0, panelWidth]);
-      genesList.forEach((gene, i) => {
-        if (gene.endPlace >= xDomain[0] && gene.startPlace <= xDomain[1]) {
-          dataGenes.push({
-            ...gene,
-            y: gene.strand === "+" ? 2 : -2,
+      cytobands.forEach((cytoband) => {
+        if (
+          cytoband.endPlace >= xDomain[0] &&
+          cytoband.startPlace <= xDomain[1]
+        ) {
+          dataCytobands.push({
+            ...cytoband,
+            y: 0,
             textPosX:
-              (d3.max([0, xScale(gene.startPlace)]) +
-                d3.min([xScale(gene.endPlace), panelWidth])) /
+              (d3.max([0, xScale(cytoband.startPlace)]) +
+                d3.min([xScale(cytoband.endPlace), panelWidth])) /
               2,
           });
         }
       });
 
-      dataGenes = filterGenesByOverlap(dataGenes);
       let offset = index * (panelWidth + margins.gapX);
       let zoom = d3
         .zoom()
@@ -326,7 +314,7 @@ class GenesPlot extends Component {
         .domain(defaultDomain)
         .range([0, panelWidth]);
 
-      let yExtent = [-8, 8];
+      let yExtent = [-1, 2];
 
       let yScale = d3
         .scaleLinear()
@@ -346,18 +334,18 @@ class GenesPlot extends Component {
         panelHeight,
         offset,
         panelGenomeScale,
-        dataGenes,
+        dataCytobands,
       });
     });
     let randID = Math.random();
 
     return (
-      <Wrapper className="ant-wrapper-genes" margins={margins}>
+      <Wrapper className="ant-wrapper-cytobands" margins={margins}>
         <div className="areaplot" ref={(elem) => (this.container = elem)} />
         <svg
           width={width}
           height={height}
-          className="plot-container-genes"
+          className="plot-container-cytobands"
           ref={(elem) => (this.plotContainer = elem)}
         >
           <defs>
@@ -405,109 +393,62 @@ class GenesPlot extends Component {
                       pointerEvents: "all",
                     }}
                   />
-                  {panel.dataGenes.map((gene, j) => (
-                    <g
-                      onMouseMove={(event) =>
-                        this.handleGeneMouseMove(event, gene)
-                      }
-                      onMouseOut={() => this.handleGeneMouseOut(gene)}
-                    >
-                      {gene.exons
-                        .filter(
-                          (g) =>
-                            panel.xScale(g.endPlace) -
-                              panel.xScale(g.startPlace) >
-                            1
-                        )
-                        .map((g) => (
-                          <rect
-                            className={`exon-rect ${
-                              gene.id === selectedGene?.id
-                                ? "rect-highlighted"
-                                : ""
-                            }`}
-                            transform={`translate(${[
-                              panel.xScale(g.startPlace),
-                              panel.yScale(gene.y) - 8,
-                            ]})`}
-                            fill={gene.strand === "+" ? "#3333FF" : "#FF4444"}
-                            stroke={d3
-                              .rgb(gene.strand === "+" ? "#3333FF" : "#FF4444")
-                              .darker()}
-                            fillOpacity={0.15}
-                            strokeOpacity={0.3}
-                            width={
-                              panel.xScale(g.endPlace) -
-                              panel.xScale(g.startPlace)
-                            }
-                            height={16}
-                          />
-                        ))}
-                      <rect
-                        className={
-                          gene.id === selectedGene?.id ? "rect-highlighted" : ""
-                        }
-                        transform={`translate(${[
-                          panel.xScale(gene.startPlace),
-                          panel.yScale(gene.y) - 1,
-                        ]})`}
-                        fill={gene.strand === "+" ? "#3333FF" : "#FF4444"}
-                        opacity={0.5}
-                        width={
-                          panel.xScale(gene.endPlace) -
-                          panel.xScale(gene.startPlace)
-                        }
-                        height={2}
-                      />
+                  {panel.dataCytobands.map((cytoband, j) => (
+                    <g className="cytoband" key={cytoband.id}>
                       <polygon
                         className={
-                          gene.id === selectedGene?.id ? "rect-highlighted" : ""
-                        }
-                        key={gene.uid}
-                        id={gene.uid}
-                        opacity={0.5}
-                        points={
-                          gene.strand === "+"
-                            ? [
-                                panel.xScale(gene.endPlace),
-                                panel.yScale(gene.y),
-                                panel.xScale(gene.endPlace) - 5,
-                                panel.yScale(gene.y) - 5,
-                                panel.xScale(gene.endPlace) - 5,
-                                panel.yScale(gene.y) + 5,
-                              ]
-                            : [
-                                panel.xScale(gene.startPlace),
-                                panel.yScale(gene.y),
-                                panel.xScale(gene.startPlace) + 5,
-                                panel.yScale(gene.y) - 5,
-                                panel.xScale(gene.startPlace) + 5,
-                                panel.yScale(gene.y) + 5,
-                              ]
-                        }
-                        fill={gene.strand === "+" ? "#3333FF" : "#FF4444"}
-                      />
-                      <text
-                        className={
-                          gene.id === selectedGene?.id
-                            ? "highlighted"
-                            : gene.textOverlap
-                            ? "hidden"
+                          cytoband.id === selectedCytoband?.id
+                            ? "rect-highlighted"
                             : ""
                         }
-                        transform={`translate(${[
-                          gene.textPosX,
-                          gene.strand === "+"
-                            ? panel.yScale(gene.y) - 20
-                            : panel.yScale(gene.y) + 20,
-                        ]})`}
-                        textAnchor="middle"
-                        fill={gene.color ? gene.color : "currentColor"}
-                        fontSize={10}
-                        onClick={() => this.handleTitleClick(gene)}
-                      >
-                        {gene.title}
-                      </text>
+                        fill={cytoband.color}
+                        points={cytoband.points
+                          .map(
+                            (e) => `${panel.xScale(e[0])},${panel.yScale(e[1])}`
+                          )
+                          .join(" ")}
+                        onMouseMove={(event) =>
+                          this.handleCytobandMouseMove(event, cytoband)
+                        }
+                        onMouseOut={() => this.handleCytobandMouseOut(cytoband)}
+                      />
+                      {cytoband.segments.map((segment, k) => (
+                        <line
+                          key={k}
+                          x1={panel.xScale(segment[0][0])}
+                          y1={panel.yScale(segment[0][1])}
+                          x2={panel.xScale(segment[1][0])}
+                          y2={panel.yScale(segment[1][1])}
+                          stroke={cytoband.chromosomeColor}
+                          strokeWidth={2}
+                        />
+                      ))}
+                      {(measureText(cytoband.title, 10) <=
+                        panel.xScale(cytoband.endPlace) -
+                          panel.xScale(cytoband.startPlace) ||
+                        cytoband.id === selectedCytoband?.id) && (
+                        <text
+                          className={
+                            cytoband.id === selectedCytoband?.id
+                              ? "highlighted"
+                              : ""
+                          }
+                          transform={`translate(${[
+                            cytoband.textPosX,
+                            panel.yScale(cytoband.y),
+                          ]})`}
+                          textAnchor="middle"
+                          fill={
+                            cytoband.titleColor
+                              ? cytoband.titleColor
+                              : "currentColor"
+                          }
+                          dy={-7.7}
+                          fontSize={10}
+                        >
+                          {cytoband.title}
+                        </text>
+                      )}
                     </g>
                   ))}
                 </g>
@@ -560,13 +501,13 @@ class GenesPlot extends Component {
     );
   }
 }
-GenesPlot.propTypes = {
+CytobandsPlot.propTypes = {
   width: PropTypes.number.isRequired,
   height: PropTypes.number.isRequired,
   data: PropTypes.array,
   chromoBins: PropTypes.object,
 };
-GenesPlot.defaultProps = {};
+CytobandsPlot.defaultProps = {};
 const mapDispatchToProps = (dispatch) => ({
   updateDomains: (domains) => dispatch(updateDomains(domains)),
   updateHoveredLocation: (hoveredLocation, panelIndex) =>
@@ -575,6 +516,7 @@ const mapDispatchToProps = (dispatch) => ({
 const mapStateToProps = (state) => ({
   chromoBins: state.Settings.chromoBins,
   defaultDomain: state.Settings.defaultDomain,
+  cytobands: state.Cytobands.data,
   hoveredLocation: state.App.hoveredLocation,
   hoveredLocationPanelIndex: state.App.hoveredLocationPanelIndex,
   zoomedByCmd: state.App.zoomedByCmd,
@@ -582,4 +524,4 @@ const mapStateToProps = (state) => ({
 export default connect(
   mapStateToProps,
   mapDispatchToProps
-)(withTranslation("common")(GenesPlot));
+)(withTranslation("common")(CytobandsPlot));
