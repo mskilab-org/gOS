@@ -1,11 +1,16 @@
 import styled from "styled-components";
 
 const Wrapper = styled.div`
+  .ant-wrapper {
+    background: white;
+    padding: 0px;
+    height: 240px;
+  }
   .ant-wrapper-legend {
     background: white;
     padding: 0px;
     .brush-container .selection {
-      stroke: #ff7f0e !important;
+      stroke: #ff7f0e;
       stroke-width: 1.3;
       fill-opacity: 0.125;
       shape-rendering: crispEdges;
