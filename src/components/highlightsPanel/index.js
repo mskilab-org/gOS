@@ -125,6 +125,7 @@ class HighlightsPanel extends Component {
                   pagination={{ pageSize: 50 }}
                   showSorterTooltip={false}
                   bordered
+                  rowKey={(record) => record.id}
                   title={() => (
                     <Space>
                       <strong>

@@ -546,6 +546,7 @@ class FilteredEventsListPanel extends Component {
                       columns={columns.filter((d, i) =>
                         eventColumns[eventType].includes(i)
                       )}
+                      rowKey={(record)=> record.variant}
                       dataSource={records}
                       pagination={{ pageSize: 50 }}
                       showSorterTooltip={false}

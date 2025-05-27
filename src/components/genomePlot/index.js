@@ -3,7 +3,6 @@ import { PropTypes } from "prop-types";
 import { connect } from "react-redux";
 import { withTranslation } from "react-i18next";
 import * as d3 from "d3";
-import debounce from "lodash.debounce";
 import Wrapper from "./index.style";
 import Connection from "../../helpers/connection";
 import {
@@ -713,7 +712,7 @@ class GenomePlot extends Component {
                 <path
                   id={d.primaryKey}
                   type="connection"
-                  key={d.identifier}
+                  key={i}
                   transform={d.transform}
                   className={`connection ${
                     d.primaryKey === tooltip.shapeId ? "highlighted" : ""

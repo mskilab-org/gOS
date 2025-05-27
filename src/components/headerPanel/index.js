@@ -11,7 +11,6 @@ import {
   Popover,
   Typography,
   Divider,
-  Flex,
 } from "antd";
 import * as d3 from "d3";
 import {
@@ -62,7 +61,6 @@ class HeaderPanel extends Component {
       sex,
       disease,
       primary_site,
-      summary,
       tags,
     } = metadata;
 
@@ -317,7 +315,7 @@ class HeaderPanel extends Component {
                           {generateCascaderOptions(tags).map((tag, i) => (
                             <Space key={tag.value}>
                               <Space direction="horizontal" size="small" wrap>
-                                <Text type="secondary" class="tag-header">
+                                <Text type="secondary" className="tag-header">
                                   {tag.label}:{" "}
                                 </Text>
                                 {tag.children.map((child) => (
