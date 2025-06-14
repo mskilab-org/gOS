@@ -1,5 +1,4 @@
 import React, { Component } from "react";
-import { PropTypes } from "prop-types";
 import { connect } from "react-redux";
 import ContainerDimensions from "react-container-dimensions";
 import handleViewport from "react-in-viewport";
@@ -21,22 +20,27 @@ import TracksModal from "../tracksModal";
 import { CgArrowsBreakeH } from "react-icons/cg";
 import ErrorPanel from "../../components/errorPanel";
 import settingsActions from "../../redux/settings/actions";
+import ResizableContainer from "../../containers/ResizableContainer/ResizableContainer";
 
 const { updateDomains } = settingsActions;
 
 const margins = {
   padding: 0,
   gap: 0,
+  maxHeight: 1000,
 };
 
 class BinPlotPanel extends Component {
-  container = null;
-
-  state = {
-    segment: null,
-    open: false,
-  };
-
+  constructor(props) {
+    super(props);
+    this.container = null;
+    this.state = {
+      parentWidth: null,
+      width: 0,
+      segment: null,
+      open: false,
+    };
+  }
   onDownloadButtonClicked = () => {
     htmlToImage
       .toCanvas(this.container, { pixelRatio: 2 })
@@ -87,6 +91,7 @@ class BinPlotPanel extends Component {
       chromoBins,
       ppfit,
       metadata,
+      height,
     } = this.props;
 
     const { beta, gamma, purity } = metadata;
@@ -150,86 +155,73 @@ class BinPlotPanel extends Component {
             }
           >
             {visible && (
-              <div
-                className="ant-wrapper"
-                ref={(elem) => (this.container = elem)}
-              >
-                <TracksModal
-                  {...{
-                    loading,
-                    genome: ppfit,
-                    genomeCoverage,
-                    hetsnps,
-                    genes,
-                    igv,
-                    chromoBins,
-                    modalTitleText: `sequence-${segment?.iid}`,
-                    modalTitle: (
-                      <span
-                        dangerouslySetInnerHTML={{
-                          __html: t("components.binQc-panel.modal-title", {
-                            iid: segment?.iid,
-                            chromosome: segment?.chromosome,
-                            width: d3.format(",")(segment?.width),
-                            mean: segment?.mean,
-                          }),
-                        }}
-                      />
-                    ),
-                    genomePlotTitle: t("components.tracks-modal.genome-plot"),
-                    genomePlotYAxisTitle: t(
-                      "components.tracks-modal.genome-y-axis-title"
-                    ),
-                    coveragePlotTitle: t(
-                      "components.tracks-modal.coverage-plot"
-                    ),
-                    coverageYAxisTitle: t(
-                      "components.tracks-modal.coverage-copy-number"
-                    ),
-                    coverageYAxis2Title: t(
-                      "components.tracks-modal.coverage-count"
-                    ),
-                    hetsnpPlotTitle: t("components.tracks-modal.hetsnp-plot"),
-                    hetsnpPlotYAxisTitle: t(
-                      "components.tracks-modal.hetsnp-copy-number"
-                    ),
-                    hetsnpPlotYAxis2Title: t(
-                      "components.tracks-modal.hetsnp-plot-count"
-                    ),
-                    handleOkClicked: this.handleModalOKClicked,
-                    handleCancelClicked: this.handleModalCancelClicked,
-                    open,
-                  }}
-                />
-                <ContainerDimensions>
-                  {({ width, height }) => {
-                    return (
+                <ResizableContainer
+                    defaultHeight={height}
+                    gap={margins.gap}
+                    padding={margins.padding}
+                    maxHeight={margins.maxHeight}
+                >
+                  {({ width, height }) =>
                       (inViewport || renderOutsideViewPort) && (
-                        <Row style={{ width }} gutter={[margins.gap, 0]}>
-                          <Col flex={1}>
-                            <BinPlot
-                              {...{
-                                width,
-                                height: 600,
-                                data: ppfit.data.intervals,
-                                xTitle: t(
-                                  `components.binQc-panel.binplot.x-title`
-                                ),
-                                yTitle: t(
-                                  `components.binQc-panel.binplot.y-title`
-                                ),
-                                selectSegment: (e) =>
-                                  this.handleSelectSegment(e),
-                                separatorsConfig: { beta, purity },
-                              }}
+                          <>
+                            <TracksModal
+                                {...{
+                                  loading,
+                                  genome: ppfit,
+                                  genomeCoverage,
+                                  hetsnps,
+                                  genes,
+                                  igv,
+                                  chromoBins,
+                                  modalTitleText: `sequence-${segment?.iid}`,
+                                  modalTitle: (
+                                      <span
+                                          dangerouslySetInnerHTML={{
+                                            __html: t("components.binQc-panel.modal-title", {
+                                              iid: segment?.iid,
+                                              chromosome: segment?.chromosome,
+                                              width: d3.format(",")(segment?.width),
+                                              mean: segment?.mean,
+                                            }),
+                                          }}
+                                      />
+                                  ),
+                                  genomePlotTitle: t("components.tracks-modal.genome-plot"),
+                                  genomePlotYAxisTitle: t(
+                                      "components.tracks-modal.genome-y-axis-title"
+                                  ),
+                                  coveragePlotTitle: t("components.tracks-modal.coverage-plot"),
+                                  coverageYAxisTitle: t(
+                                      "components.tracks-modal.coverage-copy-number"
+                                  ),
+                                  coverageYAxis2Title: t("components.tracks-modal.coverage-count"),
+                                  hetsnpPlotTitle: t("components.tracks-modal.hetsnp-plot"),
+                                  hetsnpPlotYAxisTitle: t(
+                                      "components.tracks-modal.hetsnp-copy-number"
+                                  ),
+                                  hetsnpPlotYAxis2Title: t(
+                                      "components.tracks-modal.hetsnp-plot-count"
+                                  ),
+                                  handleOkClicked: this.handleModalOKClicked,
+                                  handleCancelClicked: this.handleModalCancelClicked,
+                                  open,
+                                }}
                             />
-                          </Col>
-                        </Row>
+                            <BinPlot
+                                {...{
+                                  width,
+                                  height,
+                                  data: ppfit.data.intervals,
+                                  xTitle: t("components.binQc-panel.binplot.x-title"),
+                                  yTitle: t("components.binQc-panel.binplot.y-title"),
+                                  selectSegment: (e) => this.handleSelectSegment(e),
+                                  separatorsConfig: { beta, purity },
+                                }}
+                            />
+                          </>
                       )
-                    );
-                  }}
-                </ContainerDimensions>
-              </div>
+                  }
+                </ResizableContainer>
             )}
           </Card>
         )}
@@ -240,6 +232,7 @@ class BinPlotPanel extends Component {
 BinPlotPanel.propTypes = {};
 BinPlotPanel.defaultProps = {
   visible: true,
+  height: 600,
 };
 const mapDispatchToProps = (dispatch) => ({
   updateDomains: (domains) => dispatch(updateDomains(domains)),

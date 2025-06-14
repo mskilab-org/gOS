@@ -1,7 +1,6 @@
 import React, { Component } from "react";
 import { PropTypes } from "prop-types";
 import { connect } from "react-redux";
-import ContainerDimensions from "react-container-dimensions";
 import handleViewport from "react-in-viewport";
 import {
   Card,
@@ -9,8 +8,6 @@ import {
   Tooltip,
   Button,
   message,
-  Row,
-  Col,
   Typography,
 } from "antd";
 import { withTranslation } from "react-i18next";
@@ -20,16 +17,25 @@ import { downloadCanvasAsPng, transitionStyle } from "../../helpers/utility";
 import * as htmlToImage from "html-to-image";
 import Wrapper from "./index.style";
 import HistogramPlot from "../histogramPlot";
+import ResizableContainer from "../../containers/ResizableContainer/ResizableContainer";
 
 const { Text } = Typography;
 
 const margins = {
   padding: 0,
   gap: 0,
+  maxHeight: 500,
 };
 
 class HistogramPlotPanel extends Component {
-  container = null;
+  constructor(props) {
+    super(props);
+    this.container = null;
+    this.state = {
+      parentWidth: null,
+      width: 0,
+    };
+  }
 
   onDownloadButtonClicked = () => {
     htmlToImage
@@ -64,10 +70,11 @@ class HistogramPlotPanel extends Component {
       inViewport,
       renderOutsideViewPort,
       visible,
+      height,
     } = this.props;
 
     return (
-      <Wrapper visible={visible}>
+        <Wrapper visible={visible} ref={(elem) => (this.container = elem)}>
         <Card
           style={transitionStyle(inViewport || renderOutsideViewPort)}
           loading={loading}
@@ -115,16 +122,14 @@ class HistogramPlotPanel extends Component {
           }
         >
           {visible && (
-            <div
-              className="ant-wrapper"
-              ref={(elem) => (this.container = elem)}
-            >
-              <ContainerDimensions>
-                {({ width, height }) => {
-                  return (
+              <ResizableContainer
+                  defaultHeight={height}
+                  gap={margins.gap}
+                  padding={margins.padding}
+                  maxHeight={margins.maxHeight}
+              >
+                {({ width, height }) => (
                     (inViewport || renderOutsideViewPort) && (
-                      <Row style={{ width }} gutter={[margins.gap, 0]}>
-                        <Col flex={1}>
                           <HistogramPlot
                             {...{
                               width,
@@ -142,13 +147,9 @@ class HistogramPlotPanel extends Component {
                               format,
                             }}
                           />
-                        </Col>
-                      </Row>
                     )
-                  );
-                }}
-              </ContainerDimensions>
-            </div>
+                )}
+              </ResizableContainer>
           )}
         </Card>
       </Wrapper>
@@ -158,9 +159,12 @@ class HistogramPlotPanel extends Component {
 HistogramPlotPanel.propTypes = {
   data: PropTypes.array,
   markValue: PropTypes.number,
+
 };
 HistogramPlotPanel.defaultProps = {
   data: [],
+  height: 150,
+
 };
 const mapDispatchToProps = () => ({});
 const mapStateToProps = (state) => ({
