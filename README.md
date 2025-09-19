@@ -1,4 +1,5 @@
 # gOS Deploy Builds
+[![GitHub Pages](https://img.shields.io/badge/GitHub%20Pages-live-brightgreen)](https://mskilab-org.github.io/gOS/)
 
 Welcome! This branch keeps ready-made builds of [gOS](https://github.com/mskilab-org/gOS) so you can try the app without compiling anything yourself. The artifacts here mirror what ends up on production and come with just enough data to poke around locally.
 
@@ -29,14 +30,13 @@ Curious about the end result? Here is the genome view from the demo case report 
 - `SKIP_SERVER=1 ./setup.sh` – performs the download and data merge but exits before starting the server (handy for automation).
 
 ## Live Demo (GitHub Pages)
-Want a hosted demo you can share? This repo now ships with a GitHub Actions workflow that publishes the latest build to GitHub Pages every time you push to the `deploy-builds` branch (or whenever you trigger it manually).
+We publish the most recent prebuilt bundle straight to GitHub Pages, so anyone can explore gOS without cloning the repo.
 
-**How to enable it:**
-1. In your repository settings, open **Pages** and set **Build and deployment** to **GitHub Actions**.
-2. Push to `deploy-builds` (or use **Run workflow** on `Deploy demo to GitHub Pages`) to produce the Pages artifact.
-3. GitHub will show the public URL in the workflow summary and under the **github-pages** environment. It will look something like `https://<your-account>.github.io/gOS-deploy-builds/`. Replace the placeholder with your real URL once you've confirmed it works.
+👉 **Live site:** https://mskilab-org.github.io/gOS/
 
-Once live, drop the link above so readers can click straight into the demo.
+Every time the `Deploy demo to GitHub Pages` workflow runs (on pushes to `deploy-builds` or when triggered manually), it rebuilds that site using the latest tarball plus the shared data in this branch.
+
+If you ever need to reconfigure the deployment, open the workflow file at `.github/workflows/deploy-demo.yml` or adjust the `github-pages` environment settings under the repo’s **Settings → Pages** section.
 
 ## The `shared/` Directory (Read This!)
 The `shared/` folder contains the minimum data needed for the UI to feel real. Three files are essential:
