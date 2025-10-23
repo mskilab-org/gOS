@@ -599,7 +599,11 @@ export function updateChromoBins(coordinateSet) {
 }
 
 export function domainsToLocation(chromoBins, domains) {
-  return domains.map((d) => locateGenomeRange(chromoBins, d)).join("|");
+return domains.map((d) => locateGenomeRange(chromoBins, d)).join("|");
+}
+
+export function getDataPointsCount(dataPointsX, dataPointsX_hi) {
+  return (dataPointsX || dataPointsX_hi || []).length;
 }
 
 export function locationToDomains(chromoBins, loc) {
