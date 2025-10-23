@@ -110,10 +110,10 @@ class ScatterPlot extends Component {
   }
 
   shouldComponentUpdate(nextProps, nextState) {
-    const nextComputedX = nextProps.dataPointsX || nextProps.dataPointsX_hi.map((hi, i) => hi + nextProps.dataPointsX_lo[i]);
-    const currentComputedX = this.props.dataPointsX || this.props.dataPointsX_hi.map((hi, i) => hi + this.props.dataPointsX_lo[i]);
+    const nextLength = nextProps.dataPointsX ? nextProps.dataPointsX.length : (nextProps.dataPointsX_hi ? nextProps.dataPointsX_hi.length : 0);
+    const currentLength = this.props.dataPointsX ? this.props.dataPointsX.length : (this.props.dataPointsX_hi ? this.props.dataPointsX_hi.length : 0);
     return (
-      nextComputedX.length !== currentComputedX.length ||
+      nextLength !== currentLength ||
       nextProps.domains.toString() !== this.props.domains.toString() ||
       nextProps.width !== this.props.width ||
       nextProps.height !== this.props.height ||
@@ -198,10 +198,10 @@ class ScatterPlot extends Component {
       this.componentWillUnmount();
       this.componentDidMount();
     } else {
-      const prevComputedX = prevProps.dataPointsX || prevProps.dataPointsX_hi.map((hi, i) => hi + prevProps.dataPointsX_lo[i]);
-      const currentComputedX = this.props.dataPointsX || this.props.dataPointsX_hi.map((hi, i) => hi + this.props.dataPointsX_lo[i]);
+      const prevLength = prevProps.dataPointsX ? prevProps.dataPointsX.length : (prevProps.dataPointsX_hi ? prevProps.dataPointsX_hi.length : 0);
+      const currentLength = this.props.dataPointsX ? this.props.dataPointsX.length : (this.props.dataPointsX_hi ? this.props.dataPointsX_hi.length : 0);
       this.updateStage(
-        prevComputedX.length !== currentComputedX.length ||
+        prevLength !== currentLength ||
           (prevProps.commonRangeY === null &&
             this.props.commonRangeY !== null) ||
           (prevProps.commonRangeY !== null && this.props.commonRangeY === null)
@@ -241,7 +241,7 @@ class ScatterPlot extends Component {
 
     if (reloadData) {
       console.log("Reloading data");
-      const computedDataPointsX = dataPointsX || null
+      const computedDataPointsX = dataPointsX || this.getComputedDataPointsX();
       this.points.setData(
         computedDataPointsX,
         commonRangeY ? dataPointsY1 : dataPointsY2,
@@ -332,6 +332,7 @@ class ScatterPlot extends Component {
       defaultDomain,
       yAxisTitle,
       yAxis2Title,
+      dataPointsX,
       dataPointsY1,
       dataPointsY2,
       commonRangeY,
@@ -343,12 +344,10 @@ class ScatterPlot extends Component {
       (stageWidth - (domains.length - 1) * margins.gapX) / domains.length;
     let panelHeight = stageHeight;
     this.panels = [];
-    const computedDataPointsX = this.getComputedDataPointsX();
+    const computedDataPointsX = dataPointsX || this.getComputedDataPointsX();
     this.maxY2Values = findMaxInRanges(domains, computedDataPointsX, dataPointsY2);
-    this.extentDataPointsY1 =
-      this.extentDataPointsY1 || d3.extent(dataPointsY1);
-    this.extentDataPointsY2 =
-      this.extentDataPointsY2 || d3.extent(dataPointsY2);
+    this.extentDataPointsY1 = this.extentDataPointsY1 || d3.extent(dataPointsY1);
+    this.extentDataPointsY2 = this.extentDataPointsY2 || d3.extent(dataPointsY2);
 
     domains.forEach((xDomain, index) => {
       let offset = index * (panelWidth + margins.gapX);
@@ -495,11 +494,13 @@ ScatterPlot.propTypes = {
   height: PropTypes.number.isRequired,
   data: PropTypes.object,
   chromoBins: PropTypes.object,
+  dataPointsX: PropTypes.array,
   dataPointsX_hi: PropTypes.array,
   dataPointsX_lo: PropTypes.array,
 };
 ScatterPlot.defaultProps = {
   commonRangeY: null,
+  dataPointsX: null,
   dataPointsX_hi: null,
   dataPointsX_lo: null,
 };
