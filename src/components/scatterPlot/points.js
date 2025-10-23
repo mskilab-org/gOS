@@ -156,6 +156,12 @@ class Points {
    // Keep track of how many points we have (for instancing).
    this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
 
+   // For non-emulated precision, create dummy arrays to avoid buffer size mismatch
+   if (!this.has_emulated_precision) {
+     dataPointsX_hi = new Float32Array(this.instances);
+     dataPointsX_lo = new Float32Array(this.instances);
+   }
+
    // Store references if needed
    this.dataPointsX = this.regl.buffer(dataPointsX || []); // Use original or empty
    this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi || []); // Use filled array
