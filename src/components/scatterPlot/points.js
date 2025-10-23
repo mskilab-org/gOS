@@ -38,6 +38,7 @@ class Points {
         precision highp float;
         attribute vec2 position;
         attribute float dataX, dataY, color;
+        attribute float dataX_hi, dataX_lo;
 
         varying vec4 vColor;
         varying vec2 vPos;
@@ -46,6 +47,7 @@ class Points {
         uniform float stageWidth, stageHeight;
         uniform float windowWidth, windowHeight, pointSize;
         uniform float offsetX, offsetY;
+        uniform bool use_emulated_precision;
 
         // Convert from [0..stageWidth/stageHeight] to clip space [-1..1].
         vec2 normalizeCoords(vec2 xy) {
@@ -58,11 +60,21 @@ class Points {
         }
 
         void main() {
+          float finalDataX;
+
+          if (use_emulated_precision) {
+            // For the methylation track, reconstruct the coordinate on the GPU
+            finalDataX = dataX_hi + dataX_lo;
+          } else {
+            // For all other tracks, use the original dataX
+            finalDataX = dataX;
+          }
+
           // Convert dataX, dataY to screen coords (posX, posY)
           float kx = windowWidth / (domainX.y - domainX.x);
           float ky = -windowHeight / (domainY.y - domainY.x);
 
-          float posX = kx * (dataX - domainX.x);
+          float posX = kx * (finalDataX - domainX.x);
           float posY = windowHeight + ky * (dataY - domainY.x);
 
           float vecX = position.x + posX;
@@ -91,6 +103,8 @@ class Points {
         position: positions,    // Single vertex, instanced
         dataX: { buffer: regl.prop('dataX'), divisor: 1 },
         dataY: { buffer: regl.prop('dataY'), divisor: 1 },
+        dataX_hi: { buffer: regl.prop('dataX_hi'), divisor: 1 },
+        dataX_lo: { buffer: regl.prop('dataX_lo'), divisor: 1 },  
         color: { buffer: regl.prop('color'), divisor: 1 },
       },
 
@@ -109,6 +123,7 @@ class Points {
         domainY: regl.prop('domainY'),
         offsetX: regl.prop('offsetX'),
         offsetY: regl.prop('offsetY'),
+        use_emulated_precision: regl.prop('use_emulated_precision'),
       },
 
       depth: { enable: false },
@@ -129,9 +144,26 @@ class Points {
   /**
    * Upload data to the GPU exactly once (or whenever the dataset changes).
    */
-  setData(dataPointsX, dataPointsY, dataPointsColor) {
+  setData(
+    dataPointsX,
+    dataPointsY,
+    dataPointsColor,
+    dataPointsX_hi = null,
+    dataPointsX_lo = null
+  ) {
+    this.has_emulated_precision = dataPointsX_hi && dataPointsX_lo && dataPointsX_hi.length > 0 && dataPointsX_lo.length > 0;
+
+    // Keep track of how many points we have (for instancing).
+    this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
+
+    // Ensure hi/lo arrays have the correct length for non-emulated tracks
+    dataPointsX_hi = dataPointsX_hi || new Array(this.instances).fill(0);
+    dataPointsX_lo = dataPointsX_lo || new Array(this.instances).fill(0);
+
     // Store references if needed
-    this.dataPointsX = dataPointsX;
+    this.dataPointsX = this.regl.buffer(dataPointsX || []); // Use original or empty
+    this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi); // Use filled array
+    this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo); // Use filled array
     this.dataPointsY = dataPointsY;
     this.dataPointsColor = dataPointsColor;
 
@@ -139,9 +171,6 @@ class Points {
     this.dataX = this.regl.buffer(dataPointsX);
     this.dataY = this.regl.buffer(dataPointsY);
     this.color = this.regl.buffer(dataPointsColor);
-
-    // Keep track of how many points we have (for instancing).
-    this.instances = dataPointsX.length;
   }
 
   /**
@@ -158,6 +187,8 @@ class Points {
       return {
         // Buffers (they never change unless setData is called)
         dataX: this.dataX,
+        dataX_hi: this.dataX_hi,
+        dataX_lo: this.dataX_lo,
         dataY: this.dataY,
         color: this.color,
 
@@ -176,6 +207,8 @@ class Points {
         // Position each domain sub-plot
         offsetX: i * (this.gap + windowWidth),
         offsetY: this.offsetY,
+
+        use_emulated_precision: this.has_emulated_precision,
       };
     });
   }
