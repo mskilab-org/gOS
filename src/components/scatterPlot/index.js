@@ -31,6 +31,27 @@ class ScatterPlot extends Component {
     super(props);
     //this.updateDomains = debounce(this.props.updateDomains, 1);
     this.updateDomains = this.props.updateDomains;
+    this._computedDataPointsX = null;
+    this._lastProps = null;
+  }
+
+  getComputedDataPointsX() {
+    if (
+      this._computedDataPointsX !== null &&
+      this._lastProps &&
+      this._lastProps.dataPointsX === this.props.dataPointsX &&
+      this._lastProps.dataPointsX_hi === this.props.dataPointsX_hi &&
+      this._lastProps.dataPointsX_lo === this.props.dataPointsX_lo
+    ) {
+      return this._computedDataPointsX;
+    }
+    this._computedDataPointsX = this.props.dataPointsX || (this.props.dataPointsX_hi && this.props.dataPointsX_lo ? this.props.dataPointsX_hi.map((hi, i) => hi + this.props.dataPointsX_lo[i]) : null);
+    this._lastProps = {
+      dataPointsX: this.props.dataPointsX,
+      dataPointsX_hi: this.props.dataPointsX_hi,
+      dataPointsX_lo: this.props.dataPointsX_lo,
+    };
+    return this._computedDataPointsX;
   }
 
   componentDidMount() {
@@ -89,8 +110,10 @@ class ScatterPlot extends Component {
   }
 
   shouldComponentUpdate(nextProps, nextState) {
+    const nextComputedX = nextProps.dataPointsX || nextProps.dataPointsX_hi.map((hi, i) => hi + nextProps.dataPointsX_lo[i]);
+    const currentComputedX = this.props.dataPointsX || this.props.dataPointsX_hi.map((hi, i) => hi + this.props.dataPointsX_lo[i]);
     return (
-      nextProps.dataPointsX.length !== this.props.dataPointsX.length ||
+      nextComputedX.length !== currentComputedX.length ||
       nextProps.domains.toString() !== this.props.domains.toString() ||
       nextProps.width !== this.props.width ||
       nextProps.height !== this.props.height ||
@@ -175,8 +198,10 @@ class ScatterPlot extends Component {
       this.componentWillUnmount();
       this.componentDidMount();
     } else {
+      const prevComputedX = prevProps.dataPointsX || prevProps.dataPointsX_hi.map((hi, i) => hi + prevProps.dataPointsX_lo[i]);
+      const currentComputedX = this.props.dataPointsX || this.props.dataPointsX_hi.map((hi, i) => hi + this.props.dataPointsX_lo[i]);
       this.updateStage(
-        prevProps.dataPointsX.length !== this.props.dataPointsX.length ||
+        prevComputedX.length !== currentComputedX.length ||
           (prevProps.commonRangeY === null &&
             this.props.commonRangeY !== null) ||
           (prevProps.commonRangeY !== null && this.props.commonRangeY === null)
@@ -206,6 +231,8 @@ class ScatterPlot extends Component {
       dataPointsY2,
       dataPointsX,
       dataPointsColor,
+      dataPointsX_hi,
+      dataPointsX_lo,
       commonRangeY,
     } = this.props;
 
@@ -214,10 +241,13 @@ class ScatterPlot extends Component {
 
     if (reloadData) {
       console.log("Reloading data");
+      const computedDataPointsX = dataPointsX || null
       this.points.setData(
-        dataPointsX,
+        computedDataPointsX,
         commonRangeY ? dataPointsY1 : dataPointsY2,
-        dataPointsColor
+        dataPointsColor,
+        dataPointsX_hi,
+        dataPointsX_lo
       );
     }
 
@@ -304,7 +334,6 @@ class ScatterPlot extends Component {
       yAxis2Title,
       dataPointsY1,
       dataPointsY2,
-      dataPointsX,
       commonRangeY,
     } = this.props;
 
@@ -314,7 +343,8 @@ class ScatterPlot extends Component {
       (stageWidth - (domains.length - 1) * margins.gapX) / domains.length;
     let panelHeight = stageHeight;
     this.panels = [];
-    this.maxY2Values = findMaxInRanges(domains, dataPointsX, dataPointsY2);
+    const computedDataPointsX = this.getComputedDataPointsX();
+    this.maxY2Values = findMaxInRanges(domains, computedDataPointsX, dataPointsY2);
     this.extentDataPointsY1 =
       this.extentDataPointsY1 || d3.extent(dataPointsY1);
     this.extentDataPointsY2 =
@@ -465,9 +495,13 @@ ScatterPlot.propTypes = {
   height: PropTypes.number.isRequired,
   data: PropTypes.object,
   chromoBins: PropTypes.object,
+  dataPointsX_hi: PropTypes.array,
+  dataPointsX_lo: PropTypes.array,
 };
 ScatterPlot.defaultProps = {
   commonRangeY: null,
+  dataPointsX_hi: null,
+  dataPointsX_lo: null,
 };
 const mapDispatchToProps = (dispatch) => ({
   updateDomains: (domains) => dispatch(updateDomains(domains)),

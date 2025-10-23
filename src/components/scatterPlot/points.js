@@ -144,34 +144,32 @@ class Points {
   /**
    * Upload data to the GPU exactly once (or whenever the dataset changes).
    */
-  setData(
-    dataPointsX,
-    dataPointsY,
-    dataPointsColor,
-    dataPointsX_hi = null,
-    dataPointsX_lo = null
-  ) {
-    this.has_emulated_precision = dataPointsX_hi && dataPointsX_lo && dataPointsX_hi.length > 0 && dataPointsX_lo.length > 0;
+   setData(
+   dataPointsX = null,
+   dataPointsY,
+   dataPointsColor,
+   dataPointsX_hi = null,
+   dataPointsX_lo = null
+   ) {
+   this.has_emulated_precision = !!dataPointsX_hi && !!dataPointsX_lo;
 
-    // Keep track of how many points we have (for instancing).
-    this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
+   // Keep track of how many points we have (for instancing).
+   this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
 
-    // Ensure hi/lo arrays have the correct length for non-emulated tracks
-    dataPointsX_hi = dataPointsX_hi || new Array(this.instances).fill(0);
-    dataPointsX_lo = dataPointsX_lo || new Array(this.instances).fill(0);
+   // Store references if needed
+   this.dataPointsX = this.regl.buffer(dataPointsX || []); // Use original or empty
+   this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi || []); // Use filled array
+   this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo || []); // Use filled array
+   this.dataPointsY = dataPointsY;
+   this.dataPointsColor = dataPointsColor;
 
-    // Store references if needed
-    this.dataPointsX = this.regl.buffer(dataPointsX || []); // Use original or empty
-    this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi); // Use filled array
-    this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo); // Use filled array
-    this.dataPointsY = dataPointsY;
-    this.dataPointsColor = dataPointsColor;
-
-    // Create buffers on the GPU
-    this.dataX = this.regl.buffer(dataPointsX);
-    this.dataY = this.regl.buffer(dataPointsY);
-    this.color = this.regl.buffer(dataPointsColor);
-  }
+   // Create buffers on the GPU
+   this.dataX = this.regl.buffer(dataPointsX || new Float32Array(this.instances));
+   this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi);
+   this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo);
+   this.dataY = this.regl.buffer(dataPointsY);
+   this.color = this.regl.buffer(dataPointsColor);
+   }
 
   /**
    * Update domain, window size, and offsets for each chart/window.
@@ -187,8 +185,8 @@ class Points {
       return {
         // Buffers (they never change unless setData is called)
         dataX: this.dataX,
-        dataX_hi: this.dataX_hi,
-        dataX_lo: this.dataX_lo,
+        dataX_hi: this.dataPointsX_hi,
+        dataX_lo: this.dataPointsX_lo,
         dataY: this.dataY,
         color: this.color,
 

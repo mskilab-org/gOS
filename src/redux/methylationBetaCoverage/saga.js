@@ -41,14 +41,21 @@ function* fetchData(action) {
     };
     yield call(fetchArrowData, plot);
 
-    let dataPointsCount = plot.data.getChild("y").toArray();
+    let dataPointsCount = Array.from(plot.data.getChild("y").toArray());
     let dataPointsCopyNumber = dataPointsCount.map(
       (d) =>
         d * (metadata?.methylation_beta_cov_slope || 1) +
         (metadata?.methylation_beta_cov_intercept || 0)
     );
-    let dataPointsX = plot.data.getChild("x").toArray();
-    let dataPointsColor = plot.data.getChild("color").toArray();
+    let dataPointsX = null
+    let dataPointsColor = Array.from(plot.data.getChild("color").toArray());
+
+    let dataPointsX_hi = null;
+    let dataPointsX_lo = null;
+    if (plot.data.schema.fields.some(f => f.name === 'x_hi')) {
+      dataPointsX_hi = Array.from(plot.data.getChild("x_hi").toArray());
+      dataPointsX_lo = Array.from(plot.data.getChild("x_lo").toArray());
+    }
 
     yield put({
       type: actions.FETCH_METHYLATION_BETA_DATA_SUCCESS,
@@ -56,6 +63,8 @@ function* fetchData(action) {
       dataPointsCopyNumber,
       dataPointsX,
       dataPointsColor,
+      dataPointsX_hi,
+      dataPointsX_lo,
     });
   } catch (error) {
     yield put({

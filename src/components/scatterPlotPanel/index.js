@@ -23,6 +23,7 @@ import {
   downloadCanvasAsPng,
   transitionStyle,
   domainsToLocation,
+  getDataPointsCount,
 } from "../../helpers/utility";
 import * as htmlToImage from "html-to-image";
 import ScatterPlot from "../scatterPlot";
@@ -109,6 +110,8 @@ class ScatterPlotPanel extends Component {
       dataPointsY2,
       dataPointsX,
       dataPointsColor,
+      dataPointsX_hi,
+      dataPointsX_lo,
       error,
       filename,
       title,
@@ -122,6 +125,7 @@ class ScatterPlotPanel extends Component {
       notification,
       commonRangeY,
     } = this.props;
+    const dataPointsCount = getDataPointsCount(dataPointsX, dataPointsX_hi);
     if (!visible) return null;
     const { parentWidth, height } = this.state;
     let { gap } = margins;
@@ -165,9 +169,9 @@ class ScatterPlotPanel extends Component {
                     {title}
                     {
                       <span>
-                        <b>{d3.format(",")(dataPointsX.length)}</b>{" "}
+                        <b>{d3.format(",")(dataPointsCount)}</b>{" "}
                         {t("components.coverage-panel.datapoint", {
-                          count: dataPointsX.length,
+                          count: dataPointsCount,
                         })}
                       </span>
                     }
@@ -248,6 +252,8 @@ class ScatterPlotPanel extends Component {
                             dataPointsY2,
                             dataPointsX,
                             dataPointsColor,
+                            dataPointsX_hi,
+                            dataPointsX_lo,
                             domains,
                             yAxisTitle,
                             yAxis2Title,

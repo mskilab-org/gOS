@@ -192,111 +192,6 @@ class TracksModal extends Component {
             }}
           />
         </Col>
-        {genomeCoverage && (
-          <Col className="gutter-row" span={24}>
-            <ScatterPlotPanel
-              {...{
-                loading: genomeCoverage.loading,
-                dataPointsY1: genomeCoverage.dataPointsCopyNumber,
-                dataPointsY2: genomeCoverage.dataPointsCount,
-                dataPointsX: genomeCoverage.dataPointsX,
-                dataPointsColor: genomeCoverage.dataPointsColor,
-                error: genomeCoverage.error,
-                filename: genomeCoverage.filename,
-                title: coveragePlotTitle,
-                notification: {
-                  status:
-                    cov_slope == null || cov_intercept == null
-                      ? "warning"
-                      : null,
-                  heading:
-                    cov_slope == null || cov_intercept == null
-                      ? t(`components.tracks-modal.missing-counts-axis`)
-                      : null,
-                  messages: [
-                    ...(cov_slope == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "cov_slope",
-                          }),
-                        ]
-                      : []),
-                    ...(cov_intercept == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "cov_intercept",
-                          }),
-                        ]
-                      : []),
-                  ],
-                },
-                chromoBins,
-                visible: true,
-                height,
-                yAxisTitle:
-                  cov_slope == null || cov_intercept == null
-                    ? coverageYAxis2Title
-                    : coverageYAxisTitle,
-                yAxis2Title: coverageYAxis2Title,
-                commonRangeY,
-              }}
-            />
-          </Col>
-        )}
-        {!methylationIntensityCoverage.missing && (
-          <Col className="gutter-row" span={24}>
-            <ScatterPlotPanel
-              {...{
-                loading: methylationIntensityCoverage.loading,
-                dataPointsY1: methylationIntensityCoverage.dataPointsCopyNumber,
-                dataPointsY2: methylationIntensityCoverage.dataPointsCount,
-                dataPointsX: methylationIntensityCoverage.dataPointsX,
-                dataPointsColor: methylationIntensityCoverage.dataPointsColor,
-                error: methylationIntensityCoverage.error,
-                filename: methylationIntensityCoverage.filename,
-                title: methylationIntensityCoveragePlotTitle,
-                notification: {
-                  status:
-                    methylation_intensity_cov_slope == null ||
-                    methylation_intensity_cov_intercept == null
-                      ? "warning"
-                      : null,
-                  heading:
-                    methylation_intensity_cov_slope == null ||
-                    methylation_intensity_cov_intercept == null
-                      ? t(`components.tracks-modal.missing-counts-axis`)
-                      : null,
-                  messages: [
-                    ...(methylation_intensity_cov_slope == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "methylation_intensity_cov_slope",
-                          }),
-                        ]
-                      : []),
-                    ...(methylation_intensity_cov_intercept == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "methylation_intensity_cov_intercept",
-                          }),
-                        ]
-                      : []),
-                  ],
-                },
-                chromoBins,
-                visible: true,
-                height,
-                yAxisTitle:
-                  methylation_intensity_cov_slope == null ||
-                  methylation_intensity_cov_intercept == null
-                    ? methylationIntensityCoverageYAxis2Title
-                    : methylationIntensityCoverageYAxisTitle,
-                yAxis2Title: methylationIntensityCoverageYAxis2Title,
-                commonRangeY,
-              }}
-            />
-          </Col>
-        )}
         {!methylationBetaCoverage?.missing && (
           <Col className="gutter-row" span={24}>
             <ScatterPlotPanel
@@ -306,6 +201,8 @@ class TracksModal extends Component {
                 dataPointsY2: methylationBetaCoverage.dataPointsCount,
                 dataPointsX: methylationBetaCoverage.dataPointsX,
                 dataPointsColor: methylationBetaCoverage.dataPointsColor,
+                dataPointsX_hi: methylationBetaCoverage.dataPointsX_hi,
+                dataPointsX_lo: methylationBetaCoverage.dataPointsX_lo,
                 error: methylationBetaCoverage.error,
                 filename: methylationBetaCoverage.filename,
                 title: methylationBetaCoveragePlotTitle,
@@ -347,57 +244,6 @@ class TracksModal extends Component {
                     : methylationBetaCoverageYAxisTitle,
                 yAxis2Title: methylationBetaCoverageYAxis2Title,
                 commonRangeY: false, // This plot keeps its own Y-axis range
-              }}
-            />
-          </Col>
-        )}
-        {hetsnps && (
-          <Col className="gutter-row" span={24}>
-            <ScatterPlotPanel
-              {...{
-                loading: hetsnps.loading,
-                dataPointsY1: hetsnps.dataPointsCopyNumber,
-                dataPointsY2: hetsnps.dataPointsCount,
-                dataPointsX: hetsnps.dataPointsX,
-                dataPointsColor: hetsnps.dataPointsColor,
-                error: hetsnps.error,
-                filename: hetsnps.filename,
-                title: hetsnpPlotTitle,
-                notification: {
-                  status:
-                    hets_slope == null || hets_intercept == null
-                      ? "warning"
-                      : null,
-                  heading:
-                    hets_slope == null || hets_intercept == null
-                      ? t(`components.tracks-modal.missing-counts-axis`)
-                      : null,
-                  messages: [
-                    ...(hets_slope == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "hets_slope",
-                          }),
-                        ]
-                      : []),
-                    ...(hets_intercept == null
-                      ? [
-                          t(`general.attributes-missing.description`, {
-                            attribute: "hets_intercept",
-                          }),
-                        ]
-                      : []),
-                  ],
-                },
-                chromoBins,
-                visible: true,
-                height,
-                yAxisTitle:
-                  hets_slope == null || hets_intercept == null
-                    ? hetsnpPlotYAxis2Title
-                    : hetsnpPlotYAxisTitle,
-                yAxis2Title: hetsnpPlotYAxis2Title,
-                commonRangeY,
               }}
             />
           </Col>
