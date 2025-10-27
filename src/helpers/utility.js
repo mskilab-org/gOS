@@ -1264,7 +1264,7 @@ export function higlassGenesFieldsArrayToObject(fields, chromoBins) {
 
 function transformFusionGeneCoords(fusionGeneCoords) {
   return fusionGeneCoords
-    .split(",")
+    ?.split(",")
     .map((coord) => {
       const [chrom, positions] = coord.split(":");
       const [start, end] = positions.split("-");
@@ -1317,13 +1317,13 @@ export function transformFilteredEventAttributes(filteredEvents) {
               event.fusion_gene_coords
             );
             chromosome = event.fusion_gene_coords
-              .split(",")
+              ?.split(",")
               .map((d) => d.split(":")[0]);
             startPoint = event.fusion_gene_coords
-              .split(",")
+              ?.split(",")
               .map((d) => d.split(":")[1].split("-")[0]);
             endPoint = event.fusion_gene_coords
-              .split(",")
+              ?.split(",")
               .map((d) => d.split(":")[1].split("-")[1]);
             uid = `${chromosome}:${startPoint}-${chromosome}:${endPoint}`;
           } catch (error) {
