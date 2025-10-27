@@ -5,7 +5,6 @@ class Points {
     this.offsetY = gapY;
     this.pointSize = 10;
 
-    // GPU buffers will be set in setData(...)
     this.dataX = null;
     this.dataY = null;
     this.color = null;
@@ -14,7 +13,6 @@ class Points {
     // A single position array for instancing (one vertex).
     const positions = [[0.0, 0.0]];
 
-    // Define the draw command once and store it.
     this.drawCommand = regl({
       frag: `
         precision highp float;
@@ -38,18 +36,21 @@ class Points {
         precision highp float;
         attribute vec2 position;
         attribute float dataX, dataY, color;
-        attribute float dataX_hi, dataX_lo;
+        attribute float dataX_hi, dataX_lo; // Our precise point data
 
         varying vec4 vColor;
         varying vec2 vPos;
 
-        uniform vec2 domainX, domainY;
+        uniform vec2 domainX, domainY; 
         uniform float stageWidth, stageHeight;
         uniform float windowWidth, windowHeight, pointSize;
         uniform float offsetX, offsetY;
         uniform bool use_emulated_precision;
 
-        // Convert from [0..stageWidth/stageHeight] to clip space [-1..1].
+        uniform float domain_width;
+        uniform float domainX_hi;
+        uniform float domainX_lo;
+
         vec2 normalizeCoords(vec2 xy) {
           float x = xy[0];
           float y = xy[1];
@@ -60,42 +61,57 @@ class Points {
         }
 
         void main() {
-          float finalDataX;
+          float ky = -windowHeight / (domainY.y - domainY.x);
+          float kx;
+          float posX;
 
           if (use_emulated_precision) {
-            // For the methylation track, reconstruct the coordinate on the GPU
-            finalDataX = dataX_hi + dataX_lo;
+            kx = windowWidth / domain_width;
+
+            float relative_hi = dataX_hi - domainX_hi;
+            float relative_lo = dataX_lo - domainX_lo;
+
+            float relative_pos = relative_hi + relative_lo;
+            
+            posX = kx * relative_pos;
+
+            float red   = floor(color / 65536.0);
+            float green = floor((color - red * 65536.0) / 256.0);
+            float blue  = color - red * 65536.0 - green * 256.0;
+            vec4 realColor = vec4(red / 255.0, green / 255.0, blue / 255.0, 0.5);
+
+            // --- COMPILER TRICK ---
+            // Force the compiler to keep 'relative_pos' alive by
+            // adding an invisible value derived from it to the color.
+            // This prevents the 'posX' calculation from being broken.
+            realColor.r += (relative_pos / domain_width) * 0.0000001;
+            // -----------------------
+
+            vColor = realColor;
+
           } else {
-            // For all other tracks, use the original dataX
-            finalDataX = dataX;
+            kx = windowWidth / (domainX.y - domainX.x);
+            float relativeDataX = dataX - domainX.x;
+            posX = kx * relativeDataX;
+
+            float red   = floor(color / 65536.0);
+            float green = floor((color - red * 65536.0) / 256.0);
+            float blue  = color - red * 65536.0 - green * 256.0;
+            vColor = vec4(red / 255.0, green / 255.0, blue / 255.0, 0.5);
           }
 
-          // Convert dataX, dataY to screen coords (posX, posY)
-          float kx = windowWidth / (domainX.y - domainX.x);
-          float ky = -windowHeight / (domainY.y - domainY.x);
-
-          float posX = kx * (finalDataX - domainX.x);
           float posY = windowHeight + ky * (dataY - domainY.x);
 
           float vecX = position.x + posX;
           float vecY = position.y + posY;
 
-          // Pass screen-space position to fragment for out-of-bounds check
           vPos = vec2(vecX, vecY);
 
-          // Convert to normalized clip space for gl_Position
           vec2 clip = normalizeCoords(vec2(vecX + offsetX, vecY - offsetY));
-          // Optionally clamp if needed
           clip.y = clamp(clip.y, -1.0, 1.0);
 
           gl_PointSize = pointSize;
           gl_Position = vec4(clip, 0.0, 1.0);
-
-          // Convert packed color to normalized RGBA
-          float red   = floor(color / 65536.0);
-          float green = floor((color - red * 65536.0) / 256.0);
-          float blue  = color - red * 65536.0 - green * 256.0;
-          vColor = vec4(red / 255.0, green / 255.0, blue / 255.0, 0.5);
         }
       `,
 
@@ -119,11 +135,15 @@ class Points {
         windowWidth: regl.prop('windowWidth'),
         windowHeight: regl.prop('windowHeight'),
         pointSize: regl.prop('pointSize'),
-        domainX: regl.prop('domainX'),
+        domainX: regl.prop('domainX'), // Still needed for 'else' path
         domainY: regl.prop('domainY'),
         offsetX: regl.prop('offsetX'),
         offsetY: regl.prop('offsetY'),
         use_emulated_precision: regl.prop('use_emulated_precision'),
+
+        domain_width: regl.prop('domain_width'),
+        domainX_hi: regl.prop('domainX_hi'),
+        domainX_lo: regl.prop('domainX_lo'),
       },
 
       depth: { enable: false },
@@ -144,50 +164,59 @@ class Points {
   /**
    * Upload data to the GPU exactly once (or whenever the dataset changes).
    */
-   setData(
-   dataPointsX = null,
-   dataPointsY,
-   dataPointsColor,
-   dataPointsX_hi = null,
-   dataPointsX_lo = null
-   ) {
-   this.has_emulated_precision = !!dataPointsX_hi && !!dataPointsX_lo;
+  setData(
+    dataPointsX = null,
+    dataPointsY,
+    dataPointsColor,
+    dataPointsX_hi = null,
+    dataPointsX_lo = null
+  ) {
+    this.has_emulated_precision = !!dataPointsX_hi && !!dataPointsX_lo;
 
-   // Keep track of how many points we have (for instancing).
-   this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
+    this.instances = this.has_emulated_precision ? dataPointsX_hi.length : dataPointsX.length;
 
-   // For non-emulated precision, create dummy arrays to avoid buffer size mismatch
-   if (!this.has_emulated_precision) {
-     dataPointsX_hi = new Float32Array(this.instances);
-     dataPointsX_lo = new Float32Array(this.instances);
-   }
+    let hi_array = dataPointsX_hi;
+    let lo_array = dataPointsX_lo;
 
-   // Store references if needed
-   this.dataPointsX = this.regl.buffer(dataPointsX || []); // Use original or empty
-   this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi || []); // Use filled array
-   this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo || []); // Use filled array
-   this.dataPointsY = dataPointsY;
-   this.dataPointsColor = dataPointsColor;
+    // For non-emulated precision, create dummy arrays to avoid buffer size mismatch
+    if (!this.has_emulated_precision) {
+      hi_array = new Float32Array(this.instances);
+      lo_array = new Float32Array(this.instances);
+    }
 
-   // Create buffers on the GPU
-   this.dataX = this.regl.buffer(dataPointsX || new Float32Array(this.instances));
-   this.dataPointsX_hi = this.regl.buffer(dataPointsX_hi);
-   this.dataPointsX_lo = this.regl.buffer(dataPointsX_lo);
-   this.dataY = this.regl.buffer(dataPointsY);
-   this.color = this.regl.buffer(dataPointsColor);
-   }
+    this.dataX = this.regl.buffer(dataPointsX || new Float32Array(this.instances));
+    
+    this.dataPointsX_hi = this.regl.buffer(hi_array);
+    this.dataPointsX_lo = this.regl.buffer(lo_array);
+    
+    this.dataY = this.regl.buffer(dataPointsY);
+    this.color = this.regl.buffer(dataPointsColor);
+  }
 
   /**
    * Update domain, window size, and offsets for each chart/window.
    * No buffer uploads here; just uniform updates.
    */
   updateDomains(width, height, domains, maxYValues) {
-    // Compute the width of each sub-window
     const windowWidth = (width - (domains.length - 1) * this.gap) / domains.length;
     const windowHeight = height;
 
-    // Build an array of uniform-prop sets, one for each domain.
+    // A function to split a float64 into a F32-safe hi/lo pair
+    // This mimics the 'double' FPU rounding
+    function splitDouble(v) {
+      const hi = new Float32Array([v])[0];
+      const lo = v - hi;
+      return { hi, lo };
+    }
+
     this.dataBufferList = domains.map((domainX, i) => {
+      const domain_start_full = domainX[0];
+      const domain_end_full = domainX[1];
+
+      const precise_domain_width = domain_end_full - domain_start_full;
+
+      const { hi: domain_start_hi, lo: domain_start_lo } = splitDouble(domain_start_full);
+
       return {
         // Buffers (they never change unless setData is called)
         dataX: this.dataX,
@@ -205,10 +234,14 @@ class Points {
         windowWidth,
         windowHeight,
         pointSize: this.pointSize,
-        domainX,
+        
+        domainX: domainX,
         domainY: [0, maxYValues[i]],
 
-        // Position each domain sub-plot
+        domain_width: precise_domain_width,
+        domainX_hi: domain_start_hi,
+        domainX_lo: domain_start_lo,
+
         offsetX: i * (this.gap + windowWidth),
         offsetY: this.offsetY,
 
@@ -223,17 +256,14 @@ class Points {
    */
   render() {
     try {
-      // Clear if you want a fresh background each time
       this.regl.clear({
         color: [0, 0, 0, 0],
         depth: false,
         stencil: true,
       });
 
-      // Poll for changes in some browsers; ensures correct draw ordering
       this.regl.poll();
 
-      // Draw once for each domain in our dataBufferList
       this.drawCommand(this.dataBufferList);
     } catch (err) {
       console.error(`Scatterplot WebGL rendering failed: ${err}`);
