@@ -306,6 +306,8 @@ class TracksModal extends Component {
                 dataPointsY2: methylationBetaCoverage.dataPointsCount,
                 dataPointsX: methylationBetaCoverage.dataPointsX,
                 dataPointsColor: methylationBetaCoverage.dataPointsColor,
+                dataPointsX_hi: methylationBetaCoverage.dataPointsX_hi,
+                dataPointsX_lo: methylationBetaCoverage.dataPointsX_lo,
                 error: methylationBetaCoverage.error,
                 filename: methylationBetaCoverage.filename,
                 title: methylationBetaCoveragePlotTitle,
