@@ -8,35 +8,36 @@ const { Text } = Typography;
 /**
  * LocationRenderer
  * Renders location with ellipsis tooltip and button to open tracks view
- * 
- * @param {*} value - The location value
- * @param {Object} record - The complete record object
- * @param {Function} selectFilteredEvent - Function to handle selection
- * @returns {JSX}
  */
-export default function LocationRenderer({ value, record, selectFilteredEvent }) {
-  if (value == null) {
+class LocationRenderer extends React.Component {
+  render() {
+    const { value, record, selectFilteredEvent } = this.props;
+
+    if (value == null) {
+      return (
+        <Text italic disabled>
+          <BsDashLg />
+        </Text>
+      );
+    }
+
     return (
-      <Text italic disabled>
-        <BsDashLg />
-      </Text>
+      <div className="filtered-events-location-cell">
+        <Text
+          ellipsis={{ tooltip: value }}
+          className="filtered-events-location-text filtered-events-ellipsis-text"
+        >
+          {value}
+        </Text>
+        <Button
+          type="link"
+          onClick={() => selectFilteredEvent(record, "tracks")}
+        >
+          <ArrowRightOutlined />
+        </Button>
+      </div>
     );
   }
-
-  return (
-    <div className="filtered-events-location-cell">
-      <Text
-        ellipsis={{ tooltip: value }}
-        className="filtered-events-location-text filtered-events-ellipsis-text"
-      >
-        {value}
-      </Text>
-      <Button
-        type="link"
-        onClick={() => selectFilteredEvent(record, "tracks")}
-      >
-        <ArrowRightOutlined />
-      </Button>
-    </div>
-  );
 }
+
+export default LocationRenderer;

@@ -8,20 +8,21 @@ const { Text } = Typography;
 /**
  * FormattedNumberRenderer
  * Renders numeric values with d3 formatting
- * 
- * @param {*} value - The numeric value
- * @param {Object} record - The complete record object (unused but kept for consistency)
- * @param {string} format - d3 format string (e.g., ".3f", ",", "0.2%")
- * @returns {JSX}
  */
-export default function FormattedNumberRenderer({ value, record, format = ".3f" }) {
-  if (value == null) {
-    return (
-      <Text italic disabled>
-        <BsDashLg />
-      </Text>
-    );
-  }
+class FormattedNumberRenderer extends React.Component {
+  render() {
+    const { value, record, format = ".3f" } = this.props;
 
-  return d3.format(format)(+value);
+    if (value == null) {
+      return (
+        <Text italic disabled>
+          <BsDashLg />
+        </Text>
+      );
+    }
+
+    return d3.format(format)(+value);
+  }
 }
+
+export default FormattedNumberRenderer;
