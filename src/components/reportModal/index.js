@@ -1,4 +1,4 @@
-import React, { useState } from "react";
+import React from "react";
 import { Modal, Tabs, Alert } from "antd";
 import Wrapper from "./index.style";
 
@@ -6,139 +6,154 @@ import TracksModal from "../tracksModal";
 import AlterationCard from "../alterationCard";
 import { withTranslation } from "react-i18next";
 
+class ReportModal extends React.Component {
+  constructor(props) {
+    super(props);
+    this.state = {
+      activeTab: "alteration",
+    };
+  }
 
-function ReportModal({
-  open,
-  onClose,
-  title = "Report",
-  // data for plots
-  loading,
-  genome,
-  mutations,
-  chromoBins,
-  genomeCoverage,
-  methylationBetaCoverage,
-  methylationIntensityCoverage,
-  hetsnps,
-  genes,
-  igv,
-  allelic,
-  // optional: focus on a specific variant
-  selectedVariantId,
-  showVariants,
-  // i18n
-  t,
-  record,
-}) {
-  const [activeTab, setActiveTab] = useState("alteration");
-
-  const mainTab = {
-    key: "alteration",
-    label: t("components.report-modal.tabs.alteration"),
-    children: record ? (
-      <AlterationCard record={record} />
-    ) : (
-      <Alert type="info" message={t("components.report-modal.no-selection")} showIcon />
-    ),
+  handleTabChange = (activeTab) => {
+    this.setState({ activeTab });
   };
 
-  const items = [];
-  items.push(
-    mainTab,
-    {
-      key: "plots",
-      label: t("components.report-modal.tabs.plots"),
-      children: (
-        <div className="plots-container">
-          <TracksModal
-            {...{
-              loading: genome?.loading ?? loading,
-              genome,
-              mutations,
-              genomeCoverage,
-              methylationBetaCoverage,
-              methylationIntensityCoverage,
-              hetsnps,
-              genes,
-              igv,
-              chromoBins,
-              allelic,
-              modalTitle: "",
-              genomePlotTitle: t("components.tracks-modal.genome-plot"),
-              genomePlotYAxisTitle: t(
-                "components.tracks-modal.genome-y-axis-title"
-              ),
-              coveragePlotTitle: t("components.tracks-modal.coverage-plot"),
-              coverageYAxisTitle: t(
-                "components.tracks-modal.coverage-y-axis-title"
-              ),
-              coverageYAxis2Title: t(
-                "components.tracks-modal.coverage-y-axis2-title"
-              ),
-              methylationBetaCoveragePlotTitle: t(
-                "components.tracks-modal.methylation-beta-coverage-plot"
-              ),
-              methylationBetaCoverageYAxisTitle: t(
-                "components.tracks-modal.methylation-beta-coverage-y-axis-title"
-              ),
-              methylationBetaCoverageYAxis2Title: t(
-                "components.tracks-modal.methylation-beta-coverage-y-axis2-title"
-              ),
-              methylationIntensityCoveragePlotTitle: t(
-                "components.tracks-modal.methylation-intensity-coverage-plot"
-              ),
-              methylationIntensityCoverageYAxisTitle: t(
-                "components.tracks-modal.methylation-intensity-coverage-y-axis-title"
-              ),
-              methylationIntensityCoverageYAxis2Title: t(
-                "components.tracks-modal.methylation-intensity-coverage-y-axis2-title"
-              ),
-              hetsnpPlotTitle: t("components.tracks-modal.hetsnp-plot"),
-              hetsnpPlotYAxisTitle: t(
-                "components.tracks-modal.hetsnp-plot-y-axis-title"
-              ),
-              hetsnpPlotYAxis2Title: t(
-                "components.tracks-modal.hetsnp-plot-y-axis2-title"
-              ),
-              mutationsPlotTitle: t("components.tracks-modal.mutations-plot"),
-              mutationsPlotYAxisTitle: t(
-                "components.tracks-modal.mutations-plot-y-axis-title"
-              ),
-              allelicPlotTitle: t("components.tracks-modal.allelic-plot"),
-              allelicPlotYAxisTitle: t(
-                "components.tracks-modal.allelic-plot-y-axis-title"
-              ),
-              handleOkClicked: () => {},
-              handleCancelClicked: () => {},
-              open: true,
-              viewType: "inline",
-              showVariants: showVariants ?? !!selectedVariantId,
-              selectedVariantId,
-            }}
-          />
-        </div>
-      ),
-    }
-  );
+  render() {
+    const {
+      open,
+      onClose,
+      title = "Report",
+      // data for plots
+      loading,
+      genome,
+      mutations,
+      chromoBins,
+      genomeCoverage,
+      methylationBetaCoverage,
+      methylationIntensityCoverage,
+      hetsnps,
+      genes,
+      igv,
+      allelic,
+      // optional: focus on a specific variant
+      selectedVariantId,
+      showVariants,
+      // i18n
+      t,
+      record,
+    } = this.props;
 
-  return (
-    <Wrapper>
-      <Modal
-        open={open}
-        onCancel={onClose}
-        footer={null}
-        title={title}
-        width="95vw"
-        getContainer={false}
-      >
-        <Tabs
-          className="report-tabs"
-          activeKey={activeTab}
-          onChange={setActiveTab}
-          items={items}
-        />
-      </Modal>
-    </Wrapper>
-  );
+    const { activeTab } = this.state;
+
+    const mainTab = {
+      key: "alteration",
+      label: t("components.report-modal.tabs.alteration"),
+      children: record ? (
+        <AlterationCard record={record} />
+      ) : (
+        <Alert type="info" message={t("components.report-modal.no-selection")} showIcon />
+      ),
+    };
+
+    const items = [];
+    items.push(
+      mainTab,
+      {
+        key: "plots",
+        label: t("components.report-modal.tabs.plots"),
+        children: (
+          <div className="plots-container">
+            <TracksModal
+              {...{
+                loading: genome?.loading ?? loading,
+                genome,
+                mutations,
+                genomeCoverage,
+                methylationBetaCoverage,
+                methylationIntensityCoverage,
+                hetsnps,
+                genes,
+                igv,
+                chromoBins,
+                allelic,
+                modalTitle: "",
+                genomePlotTitle: t("components.tracks-modal.genome-plot"),
+                genomePlotYAxisTitle: t(
+                  "components.tracks-modal.genome-y-axis-title"
+                ),
+                coveragePlotTitle: t("components.tracks-modal.coverage-plot"),
+                coverageYAxisTitle: t(
+                  "components.tracks-modal.coverage-y-axis-title"
+                ),
+                coverageYAxis2Title: t(
+                  "components.tracks-modal.coverage-y-axis2-title"
+                ),
+                methylationBetaCoveragePlotTitle: t(
+                  "components.tracks-modal.methylation-beta-coverage-plot"
+                ),
+                methylationBetaCoverageYAxisTitle: t(
+                  "components.tracks-modal.methylation-beta-coverage-y-axis-title"
+                ),
+                methylationBetaCoverageYAxis2Title: t(
+                  "components.tracks-modal.methylation-beta-coverage-y-axis2-title"
+                ),
+                methylationIntensityCoveragePlotTitle: t(
+                  "components.tracks-modal.methylation-intensity-coverage-plot"
+                ),
+                methylationIntensityCoverageYAxisTitle: t(
+                  "components.tracks-modal.methylation-intensity-coverage-y-axis-title"
+                ),
+                methylationIntensityCoverageYAxis2Title: t(
+                  "components.tracks-modal.methylation-intensity-coverage-y-axis2-title"
+                ),
+                hetsnpPlotTitle: t("components.tracks-modal.hetsnp-plot"),
+                hetsnpPlotYAxisTitle: t(
+                  "components.tracks-modal.hetsnp-plot-y-axis-title"
+                ),
+                hetsnpPlotYAxis2Title: t(
+                  "components.tracks-modal.hetsnp-plot-y-axis2-title"
+                ),
+                mutationsPlotTitle: t("components.tracks-modal.mutations-plot"),
+                mutationsPlotYAxisTitle: t(
+                  "components.tracks-modal.mutations-plot-y-axis-title"
+                ),
+                allelicPlotTitle: t("components.tracks-modal.allelic-plot"),
+                allelicPlotYAxisTitle: t(
+                  "components.tracks-modal.allelic-plot-y-axis-title"
+                ),
+                handleOkClicked: () => {},
+                handleCancelClicked: () => {},
+                open: true,
+                viewType: "inline",
+                showVariants: showVariants ?? !!selectedVariantId,
+                selectedVariantId,
+              }}
+            />
+          </div>
+        ),
+      }
+    );
+
+    return (
+      <Wrapper>
+        <Modal
+          open={open}
+          onCancel={onClose}
+          footer={null}
+          title={title}
+          width="95vw"
+          getContainer={false}
+        >
+          <Tabs
+            className="report-tabs"
+            activeKey={activeTab}
+            onChange={this.handleTabChange}
+            items={items}
+          />
+        </Modal>
+      </Wrapper>
+    );
+  }
 }
+
 export default withTranslation("common")(ReportModal);
