@@ -14,9 +14,9 @@ import {
   Progress,
   Skeleton,
 } from "antd";
-import { GiDna2 } from "react-icons/gi";
 import { AiOutlineDownload } from "react-icons/ai";
 import { CgArrowsBreakeH } from "react-icons/cg";
+import { LuDnaOff } from "react-icons/lu";
 import {
   downloadCanvasAsPng,
   transitionStyle,
@@ -25,7 +25,7 @@ import {
 import * as htmlToImage from "html-to-image";
 import ErrorPanel from "../errorPanel";
 import Wrapper from "./index.style";
-import GenomePlot from "../genomePlot";
+import MutationsPlot from "../mutationsPlot";
 
 const { Text } = Typography;
 
@@ -36,7 +36,7 @@ const margins = {
   maxHeight: 500,
 };
 
-class GenomePanel extends Component {
+class MutationsPanel extends Component {
   constructor(props) {
     super(props);
     this.container = null;
@@ -112,7 +112,6 @@ class GenomePanel extends Component {
       zoomedByCmd,
       chromoBins,
       domains,
-      mutationsPlot,
       commonRangeY,
     } = this.props;
     if (!visible) return null;
@@ -129,16 +128,18 @@ class GenomePanel extends Component {
             header={
               <Space>
                 <span role="img" className="anticon anticon-dashboard">
-                  <GiDna2 />
+                  <LuDnaOff />
                 </span>
                 <span className="ant-pro-menu-item-title">{title}</span>
                 <span>{domainsToLocation(chromoBins, domains)}</span>
               </Space>
             }
-            title={t("components.genome-panel.error.title")}
-            subtitle={t("components.genome-panel.error.subtitle", { filename })}
+            title={t("components.mutations-panel.error.title")}
+            subtitle={t("components.mutations-panel.error.subtitle", {
+              filename,
+            })}
             explanationTitle={t(
-              "components.genome-panel.error.explanation.title"
+              "components.mutations-panel.error.explanation.title"
             )}
             explanationDescription={error.stack}
           />
@@ -149,13 +150,13 @@ class GenomePanel extends Component {
             title={
               <Space>
                 <span role="img" className="anticon anticon-dashboard">
-                  <GiDna2 />
+                  <LuDnaOff />
                 </span>
                 <span className="ant-pro-menu-item-title">{title}</span>
                 {genome && (
                   <span
                     dangerouslySetInnerHTML={{
-                      __html: t(`components.genome-panel.interval`, {
+                      __html: t("components.mutations-panel.mutation", {
                         count: genome.intervals.length,
                         countText: d3.format(",")(genome.intervals.length),
                       }),
@@ -208,7 +209,7 @@ class GenomePanel extends Component {
                     }}
                   >
                     {(inViewport || renderOutsideViewPort) && (
-                      <GenomePlot
+                      <MutationsPlot
                         {...{
                           width: w - gap - 2 * margins.padding,
                           height,
@@ -228,8 +229,8 @@ class GenomePanel extends Component {
     );
   }
 }
-GenomePanel.propTypes = {};
-GenomePanel.defaultProps = {
+MutationsPanel.propTypes = {};
+MutationsPanel.defaultProps = {
   error: false,
   height: 400,
   visible: true,
@@ -248,6 +249,6 @@ export default connect(
   mapDispatchToProps
 )(
   withTranslation("common")(
-    handleViewport(GenomePanel, { rootMargin: "-1.0px" })
+    handleViewport(MutationsPanel, { rootMargin: "-1.0px" })
   )
 );
