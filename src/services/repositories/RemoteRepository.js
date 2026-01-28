@@ -79,10 +79,18 @@ export class RemoteRepository extends EventInterpretationRepository {
   }
 
   async get(datasetId, caseId, alterationId, authorId) {
-    const response = await this._fetch(
-      `/datasets/${datasetId}/cases/${caseId}/interpretations/${alterationId}/${authorId}`
-    );
-    return response ? new EventInterpretation(response) : null;
+    try {
+      const response = await this._fetch(
+        `/datasets/${datasetId}/cases/${caseId}/interpretations/${alterationId}/${authorId}`
+      );
+      return response ? new EventInterpretation(response) : null;
+    } catch (err) {
+      // Return null for 404 (not found) - this is expected for new interpretations
+      if (err.message.includes("404")) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async getForCase(datasetId, caseId) {
@@ -165,5 +173,17 @@ export class RemoteRepository extends EventInterpretationRepository {
   async getTierCountsByGeneVariantType(gene, variantType) {
     const response = await this._fetch(`/genes/${gene}/variant-types/${variantType}/tier-counts`);
     return response?.counts || { 1: 0, 2: 0, 3: 0 };
+  }
+
+  async getAll() {
+    const response = await this._fetch(`/interpretations`);
+    return (response?.interpretations || []).map((data) =>
+      new EventInterpretation(data)
+    );
+  }
+
+  async getGeneVariantsWithTierChanges() {
+    const response = await this._fetch(`/interpretations/gene-variants-with-tier-changes`);
+    return new Set(response?.geneVariants || []);
   }
 }
