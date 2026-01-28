@@ -1,6 +1,6 @@
 /**
  * Remote API implementation of EventInterpretationRepository.
- * Dummy implementation for future backend integration.
+ * Connects to a remote server via HTTP (typically accessed through SSH tunnel).
  */
 
 import { EventInterpretationRepository } from "./EventInterpretationRepository";
@@ -9,7 +9,7 @@ import EventInterpretation from "../../helpers/EventInterpretation";
 export class RemoteRepository extends EventInterpretationRepository {
   constructor(config = {}) {
     super();
-    this.baseUrl = config.baseUrl || "/api/v1";
+    this.baseUrl = config.baseUrl || null;
     this.authToken = config.authToken || null;
   }
 
@@ -24,7 +24,44 @@ export class RemoteRepository extends EventInterpretationRepository {
   }
 
   async _fetch(endpoint, options = {}) {
-    throw new Error("RemoteRepository not yet implemented - backend API pending");
+    if (!this.baseUrl) {
+      throw new Error(
+        `Remote repository requires 'remoteApiUrl' in dataset config.\n\n` +
+        `Add "remoteApiUrl": "http://localhost:6050" to your dataset entry in datasets.json\n\n` +
+        `Example:\n` +
+        `{\n` +
+        `  "id": "your-dataset",\n` +
+        `  "auditLoggingRepo": "remote",\n` +
+        `  "remoteApiUrl": "http://localhost:6050"\n` +
+        `}`
+      );
+    }
+
+    const url = `${this.baseUrl}${endpoint}`;
+
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: this._headers(),
+      });
+    } catch (err) {
+      if (err.name === "TypeError") {
+        throw new Error(
+          `Cannot connect to remote API at ${this.baseUrl}.\n` +
+          `Is your SSH tunnel running?\n\n` +
+          `Example: ssh -L 6050:localhost:6050 your-hpc-server`
+        );
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Remote API error: ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   }
 
   async save(interpretation) {

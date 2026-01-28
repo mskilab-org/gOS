@@ -55,7 +55,9 @@ class RepositoryFactory {
         return new IndexedDBRepository();
 
       case REPOSITORY_TYPES.REMOTE:
-        return new RemoteRepository(config);
+        return new RemoteRepository({
+          baseUrl: config.dataset?.remoteApiUrl || config.remoteApiUrl,
+        });
 
       case REPOSITORY_TYPES.DYNAMODB:
         return new DynamoDBRepository(config);
