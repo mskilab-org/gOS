@@ -6,6 +6,7 @@
 import { IndexedDBRepository } from "./IndexedDBRepository";
 import { RemoteRepository } from "./RemoteRepository";
 import { DynamoDBRepository } from "./DynamoDBRepository";
+import { FallbackRepository } from "./FallbackRepository";
 
 export const REPOSITORY_TYPES = {
   INDEXED_DB: "indexeddb",
@@ -54,13 +55,17 @@ class RepositoryFactory {
       case REPOSITORY_TYPES.INDEXED_DB:
         return new IndexedDBRepository();
 
-      case REPOSITORY_TYPES.REMOTE:
-        return new RemoteRepository({
+      case REPOSITORY_TYPES.REMOTE: {
+        const remoteRepo = new RemoteRepository({
           baseUrl: config.dataset?.remoteApiUrl || config.remoteApiUrl,
         });
+        return new FallbackRepository(remoteRepo, { primaryName: "remote server" });
+      }
 
-      case REPOSITORY_TYPES.DYNAMODB:
-        return new DynamoDBRepository(config);
+      case REPOSITORY_TYPES.DYNAMODB: {
+        const dynamoRepo = new DynamoDBRepository(config);
+        return new FallbackRepository(dynamoRepo, { primaryName: "DynamoDB" });
+      }
 
       default:
         throw new Error(`Unknown repository type: ${repoType}`);

@@ -6,6 +6,7 @@ export { EventInterpretationRepository } from "./EventInterpretationRepository";
 export { IndexedDBRepository } from "./IndexedDBRepository";
 export { RemoteRepository } from "./RemoteRepository";
 export { DynamoDBRepository } from "./DynamoDBRepository";
+export { FallbackRepository } from "./FallbackRepository";
 export { UserAuthRepository } from "./UserAuthRepository";
 export { LocalStorageUserAuthRepository } from "./LocalStorageUserAuthRepository";
 export {
