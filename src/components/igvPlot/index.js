@@ -20,7 +20,20 @@ class IgvPlot extends Component {
   constructor(props) {
     super(props);
     this.igvInitialized = false;
-    this.updateDomain = this.props.updateDomain;
+    
+    // RAF throttling for domain updates (matches GenomePlot/ScatterPlot pattern)
+    this.rafId = null;
+    this.pendingDomain = null;
+    this.updateDomain = (domain, index) => {
+      if (this.rafId) {
+        cancelAnimationFrame(this.rafId);
+      }
+      this.pendingDomain = domain;
+      this.rafId = requestAnimationFrame(() => {
+        this.rafId = null;
+        this.props.updateDomain(this.pendingDomain, index);
+      });
+    };
   }
 
   componentDidMount() {
@@ -44,6 +57,15 @@ class IgvPlot extends Component {
     let locus = domainToLoci(chromoBins, domain);
     const { chr, position } = parseCenterFromLocus(locus);
     let tracks = [];
+    // Alignment track configuration to prevent UI lockup and memory issues
+    const alignmentTrackConfig = {
+      type: "alignment",
+      visibilityWindow: 10000,  // Reduced from 30kb default - only show alignments when zoomed in
+      samplingDepth: 150,       // Limit reads shown per position to reduce memory usage
+      maxRows: 500,             // Cap maximum rows of reads displayed
+      displayMode: "SQUISHED",  // More compact display uses less memory
+    };
+
     if (filenameTumorPresent) {
       tracks.push({
         id: "Tumor",
@@ -51,7 +73,7 @@ class IgvPlot extends Component {
         url: urlTumor,
         indexURL: indexTumorURL,
         format,
-        type: "alignment",
+        ...alignmentTrackConfig,
         sort: [{ chr, position, option: "BASE", direction: "ASC" }],
       });
     }
@@ -62,7 +84,7 @@ class IgvPlot extends Component {
         url: urlNormal,
         indexURL: indexNormalURL,
         format,
-        type: "alignment",
+        ...alignmentTrackConfig,
         sort: [{ chr, position, option: "BASE", direction: "ASC" }],
       });
     }
@@ -122,6 +144,12 @@ class IgvPlot extends Component {
   }
 
   componentWillUnmount() {
+    // Cancel any pending RAF updates
+    if (this.rafId) {
+      cancelAnimationFrame(this.rafId);
+      this.rafId = null;
+    }
+    
     if (this.igvBrowser) {
       // Remove event handlers BEFORE disposing the browser
       this.igvBrowser.off("locuschange", this.handleLocusChange);
