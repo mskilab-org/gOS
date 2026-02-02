@@ -63,7 +63,7 @@ class IgvPlot extends Component {
       visibilityWindow: 10000,  // Reduced from 30kb default - only show alignments when zoomed in
       samplingDepth: 150,       // Limit reads shown per position to reduce memory usage
       maxRows: 500,             // Cap maximum rows of reads displayed
-      displayMode: "SQUISHED",  // More compact display uses less memory
+      displayMode: "EXPANDED",  // Expanded view to see altered bases
       colorBy: "strand",        // Color by strand: forward (red/pink) vs reverse (blue) - useful for detecting strand bias
     };
 

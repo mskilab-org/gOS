@@ -40,7 +40,7 @@ const margins = {
   maxHeight: 500,
 };
 
-const PILEUP_THRESHOLD = 1000; // 1kb - reduced to improve performance
+const PILEUP_THRESHOLD = 5000; // 5kb - switch to pileup view when zoomed in
 const PILEUP_HEIGHT = 800; // Fixed height for IGV pileup view
 const COVERAGE_HEIGHT = 200; // Default height for coverage scatter plot
 
