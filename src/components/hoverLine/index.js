@@ -18,27 +18,33 @@ class HoverLine extends Component {
   plotContainer = null;
 
   componentDidUpdate(prevProps, prevState) {
-    const { hoveredLocationPanelIndex, hoveredLocation, chromoBins } =
+    const { hoveredLocationPanelIndex, hoveredLocation, chromoBins, panelIndex } =
       this.props;
 
-    if (this.panels[hoveredLocationPanelIndex]) {
+    // When panelIndex is provided, only show hoverline if it matches the hovered panel
+    // and use index 0 in the local panels array (since we only have one panel)
+    const localPanelIndex = panelIndex !== undefined ? 0 : hoveredLocationPanelIndex;
+    const shouldShow = panelIndex !== undefined 
+      ? hoveredLocationPanelIndex === panelIndex 
+      : true;
+
+    if (this.panels[localPanelIndex]) {
       d3.select(this.plotContainer)
-        .select(`#hovered-location-line-${hoveredLocationPanelIndex}`)
-        .classed("hidden", !hoveredLocation)
+        .select(`#hovered-location-line-${localPanelIndex}`)
+        .classed("hidden", !hoveredLocation || !shouldShow)
         .attr(
           "transform",
           `translate(${[
-            this.panels[hoveredLocationPanelIndex].xScale(hoveredLocation) ||
+            this.panels[localPanelIndex].xScale(hoveredLocation) ||
               -10000,
             0,
           ]})`
         );
       d3.select(this.plotContainer)
-        .select(`#hovered-location-text-${hoveredLocationPanelIndex}`)
+        .select(`#hovered-location-text-${localPanelIndex}`)
         .attr(
           "x",
-          this.panels[hoveredLocationPanelIndex].xScale(hoveredLocation) ||
-            -10000
+          shouldShow ? (this.panels[localPanelIndex].xScale(hoveredLocation) || -10000) : -10000
         )
         .text(
           Object.values(chromoBins)
@@ -57,7 +63,9 @@ class HoverLine extends Component {
   }
 
   render() {
-    const { width, height, domains, margins } = this.props;
+    const { width, height, domains: propDomains, reduxDomains, margins } = this.props;
+    // Use prop domains if provided, otherwise fall back to Redux domains
+    const domains = propDomains || reduxDomains;
 
     const gapX = margins?.gapX ?? defaultMargins.gapX;
     const gapY = margins?.gapY ?? defaultMargins.gapY;
@@ -142,7 +150,7 @@ const mapDispatchToProps = (dispatch) => ({
 });
 const mapStateToProps = (state) => ({
   chromoBins: state.Settings.chromoBins,
-  domains: state.Settings.domains,
+  reduxDomains: state.Settings.domains,
   hoveredLocation: state.Settings.hoveredLocation,
   hoveredLocationPanelIndex: state.Settings.hoveredLocationPanelIndex,
 });

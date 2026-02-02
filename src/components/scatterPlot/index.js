@@ -12,7 +12,7 @@ import settingsActions from "../../redux/settings/actions";
 
 const { updateDomains, updateHoveredLocation } = settingsActions;
 
-const margins = {
+const defaultMargins = {
   gapX: 50,
   gapY: 24,
 };
@@ -31,6 +31,10 @@ class ScatterPlot extends Component {
   _globalOutlierThresholdY2 = null;
   _outlierThresholdDataY1 = null;
   _outlierThresholdDataY2 = null;
+
+  get margins() {
+    return this.props.margins || defaultMargins;
+  }
 
   computeGlobalOutlierThreshold(
     dataPointsY,
@@ -65,7 +69,12 @@ class ScatterPlot extends Component {
       }
       this.rafId = requestAnimationFrame(() => {
         this.rafId = null;
-        this.props.updateDomains(newDomains);
+        // Use custom handler if provided, otherwise use Redux dispatch
+        if (this.props.onUpdateDomain && newDomains.length === 1) {
+          this.props.onUpdateDomain(newDomains[0], this.props.panelIndex ?? 0);
+        } else {
+          this.props.updateDomains(newDomains);
+        }
       });
     };
 
@@ -95,11 +104,11 @@ class ScatterPlot extends Component {
 
     this.regl.on("restore", () => {
       console.log("webgl context restored");
-      this.points = new Points(this.regl, margins.gapX, 0);
+      this.points = new Points(this.regl, this.margins.gapX, 0);
       this.updateStage(true);
     });
 
-    this.points = new Points(this.regl, margins.gapX, 0);
+    this.points = new Points(this.regl, this.margins.gapX, 0);
 
     const { domains, zoomedByCmd } = this.props;
     this.panels.forEach((panel, index) => {
@@ -240,8 +249,8 @@ class ScatterPlot extends Component {
   updateStage(reloadData = false) {
     const { domains, width, height, commonRangeY } = this.props;
 
-    const stageWidth = width - 2 * margins.gapX;
-    const stageHeight = height - 3 * margins.gapY;
+    const stageWidth = width - 2 * this.margins.gapX;
+    const stageHeight = height - 3 * this.margins.gapY;
 
     if (reloadData) {
       const pointsData = this.getPointsData();
@@ -321,18 +330,21 @@ class ScatterPlot extends Component {
   }
 
   handleMouseMove = throttle(
-    (e, panelIndex) => {
+    (e, localPanelIndex) => {
+      // Use global panelIndex prop if provided, otherwise use local index
+      const globalIndex = this.props.panelIndex ?? localPanelIndex;
       this.props.updateHoveredLocation(
-        this.panels[panelIndex].xScale.invert(d3.pointer(e)[0]),
-        panelIndex
+        this.panels[localPanelIndex].xScale.invert(d3.pointer(e)[0]),
+        globalIndex
       );
     },
     16,
     { leading: true, trailing: false }
   );
 
-  handleMouseOut = (e, panelIndex) => {
-    this.props.updateHoveredLocation(null, panelIndex);
+  handleMouseOut = (e, localPanelIndex) => {
+    const globalIndex = this.props.panelIndex ?? localPanelIndex;
+    this.props.updateHoveredLocation(null, globalIndex);
   };
 
   render() {
@@ -350,10 +362,10 @@ class ScatterPlot extends Component {
       commonRangeY,
     } = this.props;
 
-    let stageWidth = width - 2 * margins.gapX;
-    let stageHeight = height - 3 * margins.gapY;
+    let stageWidth = width - 2 * this.margins.gapX;
+    let stageHeight = height - 3 * this.margins.gapY;
     let panelWidth =
-      (stageWidth - (domains.length - 1) * margins.gapX) / domains.length;
+      (stageWidth - (domains.length - 1) * this.margins.gapX) / domains.length;
     let panelHeight = stageHeight;
     this.panels = [];
 
@@ -402,7 +414,7 @@ class ScatterPlot extends Component {
     }
 
     domains.forEach((xDomain, index) => {
-      let offset = index * (panelWidth + margins.gapX);
+      let offset = index * (panelWidth + this.margins.gapX);
       let zoom = d3
         .zoom()
         .scaleExtent([1, Infinity])
@@ -458,7 +470,7 @@ class ScatterPlot extends Component {
       });
     });
     const result = (
-      <Wrapper className="ant-wrapper" margins={margins} height={height}>
+      <Wrapper className="ant-wrapper" margins={this.margins} height={height}>
         <div
           className="scatterplot"
           style={{ width: stageWidth, height: stageHeight }}
@@ -472,18 +484,18 @@ class ScatterPlot extends Component {
         >
           <text
             className="y-axis-title"
-            transform={`translate(${[margins.gapX / 2, margins.gapY / 3]})`}
+            transform={`translate(${[this.margins.gapX / 2, this.margins.gapY / 3]})`}
           >
             {yAxisTitle}
           </text>
           <text
             className="y-axis-title"
-            transform={`translate(${[width, margins.gapY / 3]})`}
+            transform={`translate(${[width, this.margins.gapY / 3]})`}
             textAnchor="end"
           >
             {yAxis2Title}
           </text>
-          <g transform={`translate(${[margins.gapX, margins.gapY]})`}>
+          <g transform={`translate(${[this.margins.gapX, this.margins.gapY]})`}>
             {this.panels.map((panel, i) => (
               <g
                 key={`panel-${panel.index}`}

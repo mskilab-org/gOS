@@ -19,6 +19,7 @@ const Wrapper = styled.div`
 
   .coverage-container {
     width: 100%;
+    position: relative;
   }
 
   .pileup-container {

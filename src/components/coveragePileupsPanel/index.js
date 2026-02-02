@@ -9,8 +9,6 @@ import {
   Button,
   Tooltip,
   message,
-  Row,
-  Col,
   Typography,
   Popover,
   Spin,
@@ -45,6 +43,18 @@ const margins = {
 const PILEUP_THRESHOLD = 5000; // 5kb
 const PILEUP_HEIGHT = 800; // Fixed height for IGV pileup view
 const COVERAGE_HEIGHT = 200; // Default height for coverage scatter plot
+
+// Match GenomePlot/ScatterPlot margins for consistent panel alignment
+const panelMargins = {
+  gapX: 50,  // Same as GenomePlot
+  gapY: 24,
+};
+
+// Zero X margins for ScatterPlot when parent handles layout positioning
+const zeroMargins = {
+  gapX: 0,
+  gapY: 24,  // Keep Y margin for labels
+};
 
 class CoveragePileupsPanel extends Component {
   constructor(props) {
@@ -111,7 +121,6 @@ class CoveragePileupsPanel extends Component {
       ) ? "pileup" : "coverage";
 
       if (this.previousMode && this.previousMode !== currentMode && this.container) {
-        const containerTop = this.container.getBoundingClientRect().top + window.scrollY;
         const heightDiff = PILEUP_HEIGHT - COVERAGE_HEIGHT;
 
         if (currentMode === "pileup") {
@@ -188,6 +197,7 @@ class CoveragePileupsPanel extends Component {
   renderPanelContent(domain, index, panelWidth, panelHeight) {
     const {
       chromoBins,
+      domains,
       dataPointsY1,
       dataPointsY2,
       dataPointsX,
@@ -253,11 +263,14 @@ class CoveragePileupsPanel extends Component {
           dataPointsXLow={dataPointsXLow}
           dataPointsColor={dataPointsColor}
           domains={[domain]}
-          yAxisTitle={yAxisTitle}
-          yAxis2Title={yAxis2Title}
+          yAxisTitle={index === 0 ? yAxisTitle : ""}
+          yAxis2Title={index === domains.length - 1 ? yAxis2Title : ""}
           commonRangeY={commonRangeY}
+          panelIndex={index}
+          onUpdateDomain={this.handleUpdateDomain}
+          margins={zeroMargins}
         />
-        <HoverLine width={panelWidth} height={panelHeight} />
+        <HoverLine width={panelWidth} height={panelHeight} domains={[domain]} panelIndex={index} margins={zeroMargins} />
       </div>
     );
   }
@@ -284,11 +297,15 @@ class CoveragePileupsPanel extends Component {
     let w = parentWidth || this.container?.getBoundingClientRect().width;
     let h = height;
 
-    // Calculate panel dimensions for multi-panel layout
-    const panelWidth =
-      domains.length > 1
-        ? (w - gap - (domains.length - 1) * 16) / domains.length
-        : w - gap;
+    // Calculate dimensions matching GenomePlot pattern exactly
+    const containerWidth = w - gap;  // Same as what GenomePanel passes
+    const stageWidth = containerWidth - 2 * panelMargins.gapX;
+    const panelWidth = domains.length > 1
+      ? (stageWidth - (domains.length - 1) * panelMargins.gapX) / domains.length
+      : stageWidth;
+
+    // Calculate offset for each panel (matching GenomePlot)
+    const getPanelOffset = (index) => panelMargins.gapX + index * (panelWidth + panelMargins.gapX);
 
     // Check if any domain is in pileup mode
     const isAnyPileupMode = domains.some(
@@ -393,29 +410,32 @@ class CoveragePileupsPanel extends Component {
               <div
                 className="ant-wrapper"
                 style={{
-                  width: w - gap + "px",
+                  width: containerWidth + "px",
                   height: containerHeight + "px",
                   overflow: "auto",
+                  position: "relative",
                 }}
               >
-                {inViewport && (
-                  <Row gutter={[16, 0]}>
-                    {domains.map((domain, index) => (
-                      <Col
-                        key={index}
-                        span={Math.floor(24 / domains.length)}
-                        flex={1}
-                      >
-                        {this.renderPanelContent(
-                          domain,
-                          index,
-                          panelWidth,
-                          h
-                        )}
-                      </Col>
-                    ))}
-                  </Row>
-                )}
+                {inViewport && domains.map((domain, index) => (
+                  <div
+                    key={index}
+                    className="panel-wrapper"
+                    style={{
+                      position: "absolute",
+                      left: getPanelOffset(index),
+                      top: 0,
+                      width: panelWidth,
+                      height: containerHeight,
+                    }}
+                  >
+                    {this.renderPanelContent(
+                      domain,
+                      index,
+                      panelWidth,
+                      h
+                    )}
+                  </div>
+                ))}
               </div>
             )}
           </Card>
