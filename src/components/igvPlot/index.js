@@ -27,6 +27,9 @@ class IgvPlot extends Component {
     if (this.igvInitialized) return;
     this.igvInitialized = true;
 
+    // Signal loading start
+    this.props.onLoadingChange?.(true);
+
     const {
       domain,
       chromoBins,
@@ -77,6 +80,8 @@ class IgvPlot extends Component {
       this.igvBrowser.on("locuschange", this.handleLocusChange);
       // Initial sort on mount by center base
       this.sortAlignmentTracksByCenter(chr, position);
+      // Signal loading complete
+      this.props.onLoadingChange?.(false);
     });
   }
 
@@ -147,8 +152,12 @@ class IgvPlot extends Component {
     );
   }
 }
-IgvPlot.propTypes = {};
-IgvPlot.defaultProps = {};
+IgvPlot.propTypes = {
+  onLoadingChange: PropTypes.func,
+};
+IgvPlot.defaultProps = {
+  onLoadingChange: null,
+};
 const mapDispatchToProps = (dispatch) => ({});
 const mapStateToProps = (state) => ({});
 

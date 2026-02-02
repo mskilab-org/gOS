@@ -17,7 +17,7 @@ import { withTranslation } from "react-i18next";
 import GenomePanel from "../genomePanel";
 import MutationsPanel from "../mutationsPanel";
 import ScatterPlotPanel from "../scatterPlotPanel";
-import IgvPanel from "../igvPanel/index";
+import CoveragePileupsPanel from "../coveragePileupsPanel";
 import settingsActions from "../../redux/settings/actions";
 import TracksLegendPanel from "../tracksLegendPanel";
 import { AiOutlineDownload } from "react-icons/ai";
@@ -151,6 +151,8 @@ class TracksModal extends Component {
       loadingSageQc,
       loadingPercentageSageQc,
       selectedVariantId,
+      dataset,
+      id,
     } = this.props;
 
     if (!open) return null;
@@ -233,7 +235,7 @@ class TracksModal extends Component {
         </Col>
         {genomeCoverage && (
           <Col className="gutter-row" span={24}>
-            <ScatterPlotPanel
+            <CoveragePileupsPanel
               {...{
                 loading: genomeCoverage.loading,
                 dataPointsY1: genomeCoverage.dataPointsCopyNumber,
@@ -279,6 +281,34 @@ class TracksModal extends Component {
                     ? coverageYAxis2Title
                     : coverageYAxisTitle,
                 yAxis2Title: coverageYAxis2Title,
+                commonRangeY,
+                // IGV props
+                urlTumor: `${dataset?.dataPath || ''}${id || ''}/${igv.filenameTumor}`,
+                indexTumorURL: `${dataset?.dataPath || ''}${id || ''}/${igv.filenameTumorIndex}`,
+                urlNormal: `${dataset?.dataPath || ''}${id || ''}/${igv.filenameNormal}`,
+                indexNormalURL: `${dataset?.dataPath || ''}${id || ''}/${igv.filenameNormalIndex}`,
+                filenameTumorPresent: igv.filenameTumorPresent,
+                filenameNormalPresent: igv.filenameNormalPresent,
+                format: igv.format,
+              }}
+            />
+          </Col>
+        )}
+        {mutations && !mutations?.missing && (
+          <Col className="gutter-row" span={24}>
+            <MutationsPanel
+              {...{
+                loading: mutations.loading,
+                loadingPercentage: mutations.loadingPercentage,
+                genome: mutations.data,
+                error: mutations.error,
+                filename: mutations.filename,
+                title: mutationsPlotTitle,
+                yAxisTitle: mutationsPlotYAxisTitle,
+                chromoBins,
+                visible: true,
+                index: 0,
+                height,
                 commonRangeY,
               }}
             />
@@ -468,42 +498,6 @@ class TracksModal extends Component {
             />
           </Col>
         )}
-        {mutations && !mutations?.missing && (
-          <Col className="gutter-row" span={24}>
-            <MutationsPanel
-              {...{
-                loading: mutations.loading,
-                loadingPercentage: mutations.loadingPercentage,
-                genome: mutations.data,
-                error: mutations.error,
-                filename: mutations.filename,
-                title: mutationsPlotTitle,
-                yAxisTitle: mutationsPlotYAxisTitle,
-                chromoBins,
-                visible: true,
-                index: 0,
-                height,
-                commonRangeY,
-              }}
-            />
-          </Col>
-        )}
-        <Col className="gutter-row" span={24}>
-          <IgvPanel
-            {...{
-              loading: igv.loading,
-              error: igv.error,
-              missingFiles: igv.missingFiles,
-              filenameTumorPresent: igv.filenameTumorPresent,
-              filenameNormalPresent: igv.filenameNormalPresent,
-              filenameTumor: igv.filenameTumor,
-              filenameTumorIndex: igv.filenameTumorIndex,
-              filenameNormal: igv.filenameNormal,
-              filenameNormalIndex: igv.filenameNormalIndex,
-              format: igv.format,
-            }}
-          />
-        </Col>
       </Row>
     );
 
@@ -642,6 +636,8 @@ const mapStateToProps = (state) => ({
   chromoBins: state.Settings.chromoBins,
   dataPoints: state.SageQc.records,
   sageQcFields: state.SageQc.properties,
+  dataset: state.Settings.dataset,
+  id: state.CaseReport.id,
 });
 export default connect(
   mapStateToProps,
