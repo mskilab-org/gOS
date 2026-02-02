@@ -64,6 +64,7 @@ class IgvPlot extends Component {
       samplingDepth: 150,       // Limit reads shown per position to reduce memory usage
       maxRows: 500,             // Cap maximum rows of reads displayed
       displayMode: "SQUISHED",  // More compact display uses less memory
+      colorBy: "strand",        // Color by strand: forward (red/pink) vs reverse (blue) - useful for detecting strand bias
     };
 
     if (filenameTumorPresent) {
