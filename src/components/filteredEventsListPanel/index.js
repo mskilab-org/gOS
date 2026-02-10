@@ -53,12 +53,17 @@ const getColumnTitle = (title) => {
 
 class FilteredEventsListPanel extends Component {
   handleResetFilters = () => {
-    const { additionalColumns, resetColumnFilters } = this.props;
+    const { additionalColumns, resetColumnFilters, setColumnFilters } = this.props;
     const defaultColumnKeys = this.getDefaultColumnKeys();
     const additionalKeys = (additionalColumns || []).map((col) => col.key);
     const defaultKeys = [...new Set([...defaultColumnKeys, ...additionalKeys])];
 
-    resetColumnFilters();
+    if (this.state.eventType === "complexsv") {
+      // On complex SV tab, reset to empty filters (no tier filter)
+      setColumnFilters({});
+    } else {
+      resetColumnFilters();
+    }
     this.setState({
       selectedColumnKeys: defaultKeys,
     });
@@ -356,6 +361,7 @@ class FilteredEventsListPanel extends Component {
     selectedColumnKeys: [],
     lastBatchAction: null, // { message, inverseChanges } or null
     visibleRecords: null,  // post-filter rows from antd Table onChange
+    savedTierFilter: null, // stashed tier filter when entering complexsv tab
   };
 
   // Track if a fetch is in progress to prevent concurrent calls
@@ -393,6 +399,23 @@ class FilteredEventsListPanel extends Component {
   };
 
   handleSegmentedChange = (eventType) => {
+    const { columnFilters, setColumnFilters } = this.props;
+    const prevEventType = this.state.eventType;
+
+    if (eventType === "complexsv" && prevEventType !== "complexsv") {
+      // Stash current tier filter, then remove it for complex SV tab
+      const { tier, ...rest } = columnFilters;
+      this.setState({ savedTierFilter: tier ?? null });
+      setColumnFilters(rest);
+    } else if (eventType !== "complexsv" && prevEventType === "complexsv") {
+      // Restore the previously stashed tier filter
+      const { savedTierFilter } = this.state;
+      if (savedTierFilter != null) {
+        setColumnFilters({ ...columnFilters, tier: savedTierFilter });
+      }
+      this.setState({ savedTierFilter: null });
+    }
+
     this.setState({ eventType });
   };
 
