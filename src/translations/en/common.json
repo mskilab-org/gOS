@@ -626,6 +626,22 @@
         "loaded": "Report loaded.",
         "failed": "Failed to load report."
       },
+      "in-report": "In Report",
+      "in-report-tooltip-add": "Add to report",
+      "in-report-tooltip-uptier-add": "Uptier to Tier 1 and add to report",
+      "in-report-tooltip-remove": "Remove from report",
+      "action-bar": {
+        "selected": "{{count}} selected",
+        "add-to-report": "Add to Report ({{count}})",
+        "uptier-add-to-report": "Uptier & Add to Report ({{count}})",
+        "remove-from-report": "Remove from Report ({{count}})",
+        "retier": "Retier",
+        "clear": "Clear",
+        "undo": "Undo",
+        "undo-retier": "{{count}} alterations retiered",
+        "undo-add-report": "{{count}} alterations added to report",
+        "undo-remove-report": "{{count}} alterations removed from report"
+      },
       "reset-prompts": {
         "no-case-id": "No case ID available to reset.",
         "confirm1": "Reset all local changes to this report (tiers and edited fields)?",

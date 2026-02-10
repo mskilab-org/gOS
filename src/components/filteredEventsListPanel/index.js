@@ -15,13 +15,17 @@ import {
   Typography,
   Select,
   Checkbox,
+  Tooltip,
+  Popconfirm,
 } from "antd";
+import { FileTextOutlined, FileTextFilled, CloseOutlined, CheckOutlined, SwapOutlined } from "@ant-design/icons";
 import * as d3 from "d3";
 import { roleColorMap, transitionStyle } from "../../helpers/utility";
 import TracksModal from "../tracksModal";
 import Wrapper from "./index.style";
 import { CgArrowsBreakeH } from "react-icons/cg";
 import filteredEventsActions from "../../redux/filteredEvents/actions";
+import interpretationsActions from "../../redux/interpretations/actions";
 import { selectMergedEvents } from "../../redux/interpretations/selectors";
 import ErrorPanel from "../errorPanel";
 import ReportModal from "../reportModal";
@@ -65,54 +69,276 @@ class FilteredEventsListPanel extends Component {
     toggleEventUidSelection(record.uid, checked);
   };
 
-  handleHeaderCheckboxChange = (records) => {
-    const { selectedEventUids, setSelectedEventUids } = this.props;
-    
-    // Get all tier 1 and 2 records from current view
-    const tier1And2Records = records.filter(
+  handleToggleInReport = async (record) => {
+    const { dataset, id: caseId } = this.props;
+
+    const { ensureUser } = await import("../../helpers/userAuth");
+    try {
+      await ensureUser();
+    } catch (error) {
+      return; // User cancelled sign-in
+    }
+
+    const EventInterpretation = (await import("../../helpers/EventInterpretation")).default;
+    const currentInReport = record.inReport;
+    const newValue = currentInReport ? null : true;
+
+    // When adding a T3 event to report, also uptier to T1
+    const data = { inReport: newValue };
+    if (newValue && +record.tier === 3) {
+      data.tier = "1";
+    }
+
+    const interpretation = new EventInterpretation({
+      datasetId: dataset?.id,
+      caseId: caseId || "UNKNOWN",
+      alterationId: record.uid,
+      gene: record.gene,
+      variant: record.variant,
+      variant_type: record.type,
+      data,
+    });
+
+    this.props.updateInterpretation(interpretation.toJSON());
+  };
+
+  getSelectedRecords = () => {
+    const { selectedEventUids, filteredEvents } = this.props;
+    return filteredEvents.filter((r) => selectedEventUids.includes(r.uid));
+  };
+
+  getRetierLabel = (selectedRecords) => {
+    const hasT1or2 = selectedRecords.some(
       (r) => r.tier && (+r.tier === 1 || +r.tier === 2)
     );
-    const tier1And2Uids = tier1And2Records.map((r) => r.uid);
-    
-    // Check current state
-    const selectedTier1And2 = tier1And2Uids.filter((uid) =>
+    const hasT3 = selectedRecords.some((r) => r.tier && +r.tier === 3);
+
+    if (hasT1or2 && hasT3) return "Tier 1+2 → 3, Tier 3 → 1";
+    if (hasT1or2) return "Tier 1+2 → 3";
+    if (hasT3) return "Tier 3 → 1";
+    return "Retier";
+  };
+
+  getReportToggleLabel = (selectedRecords) => {
+    const { t } = this.props;
+    const notInReport = selectedRecords.filter((r) => !r.inReport);
+    const inReport = selectedRecords.filter((r) => !!r.inReport);
+
+    if (notInReport.length > 0) {
+      // Check if any not-in-report events are T3 (will be uptiered)
+      const hasT3ToAdd = notInReport.some((r) => +r.tier === 3);
+      const key = hasT3ToAdd
+        ? "components.filtered-events-panel.action-bar.uptier-add-to-report"
+        : "components.filtered-events-panel.action-bar.add-to-report";
+      return t(key, { count: notInReport.length });
+    }
+    return t("components.filtered-events-panel.action-bar.remove-from-report", {
+      count: inReport.length,
+    });
+  };
+
+  handleBatchReportToggle = async () => {
+    const { ensureUser } = await import("../../helpers/userAuth");
+    try {
+      await ensureUser();
+    } catch (error) {
+      return;
+    }
+
+    const selectedRecords = this.getSelectedRecords();
+    const notInReport = selectedRecords.filter((r) => !r.inReport);
+    const willAdd = notInReport.length > 0;
+
+    // Capture inverse for undo (include tier for T3 events that will be uptiered)
+    const inverseChanges = selectedRecords.map((r) => {
+      const data = { inReport: r.inReport ? true : null };
+      // If adding and this is T3, undo needs to restore original tier
+      if (willAdd && +r.tier === 3) {
+        data.tier = String(r.tier);
+      }
+      return {
+        alterationId: r.uid,
+        gene: r.gene,
+        variant: r.variant,
+        variant_type: r.type,
+        data,
+      };
+    });
+
+    // Build forward changes (uptier T3 events when adding to report)
+    const changes = selectedRecords.map((r) => {
+      const data = { inReport: willAdd ? true : null };
+      if (willAdd && +r.tier === 3) {
+        data.tier = "1";
+      }
+      return {
+        alterationId: r.uid,
+        gene: r.gene,
+        variant: r.variant,
+        variant_type: r.type,
+        data,
+      };
+    });
+
+    this.props.batchUpdateInterpretations(changes);
+
+    const { t } = this.props;
+    const message = willAdd
+      ? t("components.filtered-events-panel.action-bar.undo-add-report", {
+          count: selectedRecords.length,
+        })
+      : t("components.filtered-events-panel.action-bar.undo-remove-report", {
+          count: selectedRecords.length,
+        });
+
+    this.props.setSelectedEventUids([]);
+    this.setState({
+      lastBatchAction: { message, inverseChanges },
+    });
+  };
+
+  handleBatchRetier = async () => {
+    const { ensureUser } = await import("../../helpers/userAuth");
+    try {
+      await ensureUser();
+    } catch (error) {
+      return;
+    }
+
+    const selectedRecords = this.getSelectedRecords();
+
+    // Capture inverse for undo
+    const inverseChanges = selectedRecords.map((r) => ({
+      alterationId: r.uid,
+      gene: r.gene,
+      variant: r.variant,
+      variant_type: r.type,
+      data: { tier: String(r.tier) },
+    }));
+
+    // Build forward changes: T1/T2 → T3, T3 → T1
+    const changes = selectedRecords.map((r) => ({
+      alterationId: r.uid,
+      gene: r.gene,
+      variant: r.variant,
+      variant_type: r.type,
+      data: {
+        tier: +r.tier === 1 || +r.tier === 2 ? "3" : "1",
+      },
+    }));
+
+    this.props.batchUpdateInterpretations(changes);
+
+    const label = this.getRetierLabel(selectedRecords);
+    const { t } = this.props;
+    const message = t(
+      "components.filtered-events-panel.action-bar.undo-retier",
+      { count: selectedRecords.length }
+    ) + ` (${label})`;
+
+    this.props.setSelectedEventUids([]);
+    this.setState({
+      lastBatchAction: { message, inverseChanges },
+    });
+  };
+
+  handleUndo = async () => {
+    const { lastBatchAction } = this.state;
+    if (!lastBatchAction) return;
+
+    this.props.batchUpdateInterpretations(lastBatchAction.inverseChanges);
+    this.setState({ lastBatchAction: null });
+  };
+
+  handleDismissActionBar = () => {
+    this.props.setSelectedEventUids([]);
+    this.setState({ lastBatchAction: null });
+  };
+
+  getEffectiveVisibleRecords = (records) => {
+    const { visibleRecords } = this.state;
+    if (visibleRecords) return visibleRecords;
+
+    // Fallback: apply columnFilters manually when Table hasn't fired onChange yet
+    const { columnFilters } = this.props;
+    if (!columnFilters || Object.keys(columnFilters).length === 0) return records;
+
+    return records.filter((record) => {
+      for (const [key, values] of Object.entries(columnFilters)) {
+        if (!values || values.length === 0) continue;
+        const recordValue = record[key];
+        // Match if record value is in the filter values (string comparison)
+        if (!values.some((v) => String(recordValue) === String(v))) {
+          return false;
+        }
+      }
+      return true;
+    });
+  };
+
+  getRetierPopconfirmContent = (selectedRecords) => {
+    const downTier = selectedRecords.filter(
+      (r) => +r.tier === 1 || +r.tier === 2
+    );
+    const upTier = selectedRecords.filter((r) => +r.tier === 3);
+
+    return (
+      <div>
+        {downTier.length > 0 && (
+          <div>{downTier.length} alteration(s): Tier 1+2 → 3</div>
+        )}
+        {upTier.length > 0 && (
+          <div>{upTier.length} alteration(s): Tier 3 → 1</div>
+        )}
+      </div>
+    );
+  };
+
+  handleHeaderCheckboxChange = (records) => {
+    const { selectedEventUids, setSelectedEventUids } = this.props;
+
+    // Use post-filter visible records, with manual filter fallback for initial load
+    const targetRecords = this.getEffectiveVisibleRecords(records);
+    const targetUids = targetRecords.map((r) => r.uid);
+
+    const selectedTarget = targetUids.filter((uid) =>
       selectedEventUids.includes(uid)
     );
-    const allSelected = selectedTier1And2.length === tier1And2Uids.length && tier1And2Uids.length > 0;
-    
+    const allSelected =
+      selectedTarget.length === targetUids.length && targetUids.length > 0;
+
     if (allSelected) {
-      // Deselect all tier 1 and 2
       const newUids = selectedEventUids.filter(
-        (uid) => !tier1And2Uids.includes(uid)
+        (uid) => !targetUids.includes(uid)
       );
       setSelectedEventUids(newUids);
     } else {
-      // Select all tier 1 and 2
-      const newSelectedUids = [...new Set([...selectedEventUids, ...tier1And2Uids])];
-      setSelectedEventUids(newSelectedUids);
+      const newUids = [...new Set([...selectedEventUids, ...targetUids])];
+      setSelectedEventUids(newUids);
     }
+
+    // Clear any pending undo when starting new selection
+    this.setState({ lastBatchAction: null });
   };
 
   getHeaderCheckboxState = (records) => {
     const { selectedEventUids } = this.props;
-    
-    // Get all tier 1 and 2 records from current view
-    const tier1And2Records = records.filter(
-      (r) => r.tier && (+r.tier === 1 || +r.tier === 2)
-    );
-    const tier1And2Uids = tier1And2Records.map((r) => r.uid);
-    
-    if (tier1And2Uids.length === 0) {
+
+    // Use post-filter visible records, with manual filter fallback for initial load
+    const targetRecords = this.getEffectiveVisibleRecords(records);
+    const targetUids = targetRecords.map((r) => r.uid);
+
+    if (targetUids.length === 0) {
       return { checked: false, indeterminate: false };
     }
-    
-    const selectedTier1And2 = tier1And2Uids.filter((uid) =>
+
+    const selectedTarget = targetUids.filter((uid) =>
       selectedEventUids.includes(uid)
     );
-    
-    if (selectedTier1And2.length === 0) {
+
+    if (selectedTarget.length === 0) {
       return { checked: false, indeterminate: false };
-    } else if (selectedTier1And2.length === tier1And2Uids.length) {
+    } else if (selectedTarget.length === targetUids.length) {
       return { checked: true, indeterminate: false };
     } else {
       return { checked: false, indeterminate: true };
@@ -128,6 +354,8 @@ class FilteredEventsListPanel extends Component {
     tierCountsMap: {},
     geneVariantsWithTierChanges: null,
     selectedColumnKeys: [],
+    lastBatchAction: null, // { message, inverseChanges } or null
+    visibleRecords: null,  // post-filter rows from antd Table onChange
   };
 
   // Track if a fetch is in progress to prevent concurrent calls
@@ -203,7 +431,9 @@ class FilteredEventsListPanel extends Component {
     this.setState({ selectedColumnKeys: selectedKeys });
   };
 
-  handleTableChange = (pagination, filters) => {
+  handleTableChange = (pagination, filters, sorter, extra) => {
+    this.setState({ visibleRecords: extra?.currentDataSource || null });
+
     const columnFilters = {};
     Object.keys(filters).forEach((key) => {
       if (filters[key] && filters[key].length > 0) {
@@ -361,6 +591,7 @@ class FilteredEventsListPanel extends Component {
       data,
       dataset,
       inViewport,
+      selectedEventUids,
     } = this.props;
 
     let open = selectedFilteredEvent?.id;
@@ -412,6 +643,48 @@ class FilteredEventsListPanel extends Component {
           onChange={(e) => this.handleCheckboxChange(record, e.target.checked)}
         />
       ),
+    };
+
+    // Report membership icon column
+    const reportColumn = {
+      title: (
+        <Tooltip title={t("components.filtered-events-panel.in-report")}>
+          <FileTextOutlined style={{ fontSize: 14 }} />
+        </Tooltip>
+      ),
+      key: "inReport",
+      width: 40,
+      fixed: "left",
+      align: "center",
+      render: (_, record) => {
+        const isInReport = !!record.inReport;
+        const isT3 = +record.tier === 3;
+        const addTooltipKey = isT3
+          ? "components.filtered-events-panel.in-report-tooltip-uptier-add"
+          : "components.filtered-events-panel.in-report-tooltip-add";
+        return (
+          <Tooltip
+            title={
+              isInReport
+                ? t("components.filtered-events-panel.in-report-tooltip-remove")
+                : t(addTooltipKey)
+            }
+          >
+            <Button
+              type="text"
+              size="small"
+              icon={
+                isInReport ? (
+                  <FileTextFilled style={{ color: "#1890ff" }} />
+                ) : (
+                  <FileTextOutlined style={{ color: "#d9d9d9" }} />
+                )
+              }
+              onClick={() => this.handleToggleInReport(record)}
+            />
+          </Tooltip>
+        );
+      },
     };
 
     return (
@@ -533,9 +806,10 @@ class FilteredEventsListPanel extends Component {
                     <Table
                       columns={[
                         checkboxColumn,
+                        reportColumn,
                         ...(additionalColumns || []),
                         ...columns,
-                      ].filter((col) => col.key === "select" || selectedColumnKeys.includes(col.key))}
+                      ].filter((col) => col.key === "select" || col.key === "inReport" || selectedColumnKeys.includes(col.key))}
                       dataSource={records}
                       pagination={{ pageSize: 50 }}
                       showSorterTooltip={false}
@@ -543,6 +817,61 @@ class FilteredEventsListPanel extends Component {
                       scroll={{ x: "100%", y: 500 }}
                       tableLayout="fixed"
                     />
+                    {(selectedEventUids.length > 0 || this.state.lastBatchAction) && (
+                      <div className="batch-action-bar">
+                        {this.state.lastBatchAction ? (
+                          <>
+                            <CheckOutlined style={{ color: "#52c41a" }} />
+                            <span className="batch-action-success">
+                              {this.state.lastBatchAction.message}
+                            </span>
+                            <Button size="small" onClick={this.handleUndo}>
+                              {t("components.filtered-events-panel.action-bar.undo")}
+                            </Button>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<CloseOutlined />}
+                              onClick={this.handleDismissActionBar}
+                            />
+                          </>
+                        ) : (
+                          <>
+                            <span className="batch-action-count">
+                              {t("components.filtered-events-panel.action-bar.selected", {
+                                count: selectedEventUids.length,
+                              })}
+                            </span>
+                            <Button
+                              size="small"
+                              icon={<FileTextOutlined />}
+                              onClick={this.handleBatchReportToggle}
+                            >
+                              {this.getReportToggleLabel(this.getSelectedRecords())}
+                            </Button>
+                            <Popconfirm
+                              title={t("components.filtered-events-panel.action-bar.retier")}
+                              description={this.getRetierPopconfirmContent(
+                                this.getSelectedRecords()
+                              )}
+                              onConfirm={this.handleBatchRetier}
+                              okText="Apply"
+                              cancelText="Cancel"
+                            >
+                              <Button size="small" icon={<SwapOutlined />}>
+                                {this.getRetierLabel(this.getSelectedRecords())}
+                              </Button>
+                            </Popconfirm>
+                            <Button
+                              type="text"
+                              size="small"
+                              icon={<CloseOutlined />}
+                              onClick={this.handleDismissActionBar}
+                            />
+                          </>
+                        )}
+                      </div>
+                    )}
                     {selectedFilteredEvent && viewMode === "tracks" && (
                       <TracksModal
                         {...{
@@ -703,6 +1032,10 @@ const mapDispatchToProps = (dispatch) => ({
     dispatch(setColumnFilters(columnFilters)),
   resetColumnFilters: () =>
     dispatch(resetColumnFilters()),
+  updateInterpretation: (interpretation) =>
+    dispatch(interpretationsActions.updateInterpretation(interpretation)),
+  batchUpdateInterpretations: (changes) =>
+    dispatch(interpretationsActions.batchUpdateInterpretations(changes)),
 });
 const mapStateToProps = (state) => {
   const mergedEvents = selectMergedEvents(state);

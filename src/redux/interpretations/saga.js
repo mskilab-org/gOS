@@ -282,11 +282,118 @@ function* updateAuthorName(action) {
   }
 }
 
+function* batchUpdateInterpretations(action) {
+  const { changes } = action;
+
+  try {
+    const state = yield select(getCurrentState);
+    const caseId = state.CaseReport?.id;
+    const dataset = state.Settings?.dataset;
+    const datasetId = dataset?.id;
+    const currentUserId = getCurrentUserId();
+
+    if (!caseId || !datasetId) {
+      throw new Error("Missing caseId or datasetId");
+    }
+
+    const repository = getActiveRepository({ dataset });
+
+    // 1. One read: get all existing interpretations for this case
+    const allExisting = yield call([repository, repository.getForCase], datasetId, caseId);
+    const existingMap = {};
+    for (const interp of allExisting) {
+      const json = interp.toJSON ? interp.toJSON() : interp;
+      if (json.authorId === currentUserId || json.authorId === "currentUser") {
+        existingMap[json.alterationId] = json;
+      }
+    }
+
+    // 2. Build interpretations
+    const filteredEventsState = yield select(state => state.FilteredEvents);
+    const originalFilteredEvents = filteredEventsState?.originalFilteredEvents || [];
+    const user = getUser();
+    const toSave = [];
+    const toDelete = [];
+
+    for (const change of changes) {
+      const existing = existingMap[change.alterationId];
+      const mergedData = {
+        ...(existing?.data || {}),
+        ...change.data,
+      };
+
+      const interp = new EventInterpretation({
+        datasetId,
+        caseId,
+        alterationId: change.alterationId,
+        gene: change.gene || existing?.gene,
+        variant: change.variant || existing?.variant,
+        variant_type: change.variant_type || existing?.variant_type,
+        data: mergedData,
+      });
+
+      const originalEvent = originalFilteredEvents.find(
+        (e) => e.uid === change.alterationId
+      );
+
+      if (interp.matchesOriginal(originalEvent)) {
+        if (existing) {
+          toDelete.push({
+            alterationId: change.alterationId,
+            authorId: existing.authorId || currentUserId,
+          });
+        }
+      } else {
+        // Sign sequentially (in-memory crypto, fast)
+        if (user && user.privateKey) {
+          const interpData = interp.toJSON();
+          const signature = yield call(signInterpretation, interpData, user);
+          interp.signature = signature;
+        }
+        toSave.push(interp);
+      }
+    }
+
+    // 3. One write transaction
+    if (toSave.length > 0) {
+      yield call([repository, repository.bulkSave], toSave);
+    }
+
+    // 4. Delete matched originals (rare, sequential is fine)
+    for (const { alterationId, authorId } of toDelete) {
+      yield call(
+        [repository, repository.delete],
+        datasetId, caseId, alterationId, authorId
+      );
+    }
+
+    // 5. Single Redux update
+    const savedInterpretations = toSave.map((interp) => ({
+      ...interp.toJSON(),
+      isCurrentUser: true,
+    }));
+
+    yield put({
+      type: actions.BATCH_UPDATE_INTERPRETATIONS_SUCCESS,
+      interpretations: savedInterpretations,
+      deletedAlterationIds: toDelete.map((d) => d.alterationId),
+      caseId,
+    });
+  } catch (error) {
+    console.error("Batch update interpretations failed:", error);
+    yield put({
+      type: actions.BATCH_UPDATE_INTERPRETATIONS_FAILED,
+      error: error.message || "Failed to batch update interpretations",
+    });
+  }
+}
+
 function* actionWatcher() {
   yield takeEvery(actions.FETCH_INTERPRETATIONS_FOR_CASE_REQUEST, fetchInterpretationsForCase);
   yield takeEvery(actions.UPDATE_INTERPRETATION_REQUEST, updateInterpretation);
   yield takeEvery(actions.CLEAR_CASE_INTERPRETATIONS_REQUEST, clearCaseInterpretations);
   yield takeEvery(actions.UPDATE_AUTHOR_NAME_REQUEST, updateAuthorName);
+  yield takeEvery(actions.BATCH_UPDATE_INTERPRETATIONS_REQUEST, batchUpdateInterpretations);
 }
 
 export default function* rootSaga() {

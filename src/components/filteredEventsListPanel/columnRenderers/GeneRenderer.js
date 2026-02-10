@@ -26,10 +26,16 @@ export default function GeneRenderer({ value, record, selectFilteredEvent }) {
   }
 
   const alterationId = record.uid;
-  const count = getAllInterpretationsForAlteration(
+  const allInterps = getAllInterpretationsForAlteration(
     store.getState(),
     alterationId
-  ).length;
+  );
+  // Don't count interpretations that only have inReport (no substantive overrides)
+  const count = allInterps.filter((interp) => {
+    const data = interp.data || {};
+    const keys = Object.keys(data).filter((k) => k !== "inReport");
+    return keys.length > 0;
+  }).length;
 
   return (
     <Button type="link" onClick={() => selectFilteredEvent(record, "detail")}>

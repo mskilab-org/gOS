@@ -190,6 +190,31 @@ const Wrapper = styled.div`
   .reset-state-btn {
     margin-bottom: 16px;
   }
+
+  .batch-action-bar {
+    position: sticky;
+    bottom: 0;
+    z-index: 10;
+    background: #fff;
+    border-top: 1px solid #f0f0f0;
+    padding: 8px 16px;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    box-shadow: 0 -2px 8px rgba(0, 0, 0, 0.08);
+    border-radius: 0 0 8px 8px;
+  }
+
+  .batch-action-bar .batch-action-count {
+    font-weight: 600;
+    white-space: nowrap;
+  }
+
+  .batch-action-bar .batch-action-success {
+    color: #52c41a;
+    font-weight: 600;
+    flex: 1;
+  }
 `;
 
 export default Wrapper;

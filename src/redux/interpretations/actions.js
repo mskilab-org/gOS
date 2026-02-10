@@ -15,6 +15,10 @@ const actions = {
   UPDATE_AUTHOR_NAME_SUCCESS: "UPDATE_AUTHOR_NAME_SUCCESS",
   UPDATE_AUTHOR_NAME_FAILED: "UPDATE_AUTHOR_NAME_FAILED",
 
+  BATCH_UPDATE_INTERPRETATIONS_REQUEST: "BATCH_UPDATE_INTERPRETATIONS_REQUEST",
+  BATCH_UPDATE_INTERPRETATIONS_SUCCESS: "BATCH_UPDATE_INTERPRETATIONS_SUCCESS",
+  BATCH_UPDATE_INTERPRETATIONS_FAILED: "BATCH_UPDATE_INTERPRETATIONS_FAILED",
+
   SELECT_INTERPRETATION: "SELECT_INTERPRETATION",
 
   fetchInterpretationsForCase: (caseId) => ({
@@ -38,6 +42,10 @@ const actions = {
     type: actions.SELECT_INTERPRETATION,
     alterationId,
     key,
+  }),
+  batchUpdateInterpretations: (changes) => ({
+    type: actions.BATCH_UPDATE_INTERPRETATIONS_REQUEST,
+    changes, // Array of { alterationId, gene, variant, variant_type, data }
   }),
 };
 

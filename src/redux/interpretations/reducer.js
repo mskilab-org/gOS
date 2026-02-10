@@ -172,6 +172,80 @@ export default function interpretationsReducer(state = initState, action) {
           [action.alterationId]: action.key,
         },
       };
+    case actions.BATCH_UPDATE_INTERPRETATIONS_REQUEST:
+      return {
+        ...state,
+        status: "pending",
+      };
+    case actions.BATCH_UPDATE_INTERPRETATIONS_SUCCESS: {
+      const { interpretations, deletedAlterationIds, caseId } = action;
+
+      const updatedById = { ...state.byId };
+      const updatedSelected = { ...state.selected };
+      const updatedByGene = { ...state.byGene };
+
+      // Add/update saved interpretations
+      for (const interpretation of interpretations) {
+        const key = `${interpretation.alterationId}___${interpretation.authorId}___${caseId}`;
+
+        const existing = updatedById[key];
+        const merged = existing
+          ? {
+              ...existing,
+              ...interpretation,
+              data: {
+                ...(existing.data || {}),
+                ...(interpretation.data || {}),
+              },
+            }
+          : interpretation;
+
+        updatedById[key] = merged;
+
+        if (interpretation.isCurrentUser) {
+          updatedSelected[interpretation.alterationId] = key;
+        }
+
+        const gene = merged.gene;
+        if (gene) {
+          if (!updatedByGene[gene]) updatedByGene[gene] = {};
+          updatedByGene[gene] = { ...updatedByGene[gene], [key]: merged };
+        }
+      }
+
+      // Remove deleted interpretations
+      for (const alterationId of (deletedAlterationIds || [])) {
+        const keysToRemove = Object.keys(updatedById).filter((k) =>
+          k.startsWith(`${alterationId}___`) && updatedById[k]?.isCurrentUser
+        );
+        for (const key of keysToRemove) {
+          const gene = updatedById[key]?.gene;
+          delete updatedById[key];
+          if (gene && updatedByGene[gene]) {
+            updatedByGene[gene] = { ...updatedByGene[gene] };
+            delete updatedByGene[gene][key];
+          }
+        }
+        if (updatedSelected[alterationId]) {
+          delete updatedSelected[alterationId];
+        }
+      }
+
+      return {
+        ...state,
+        status: "succeeded",
+        byId: updatedById,
+        selected: updatedSelected,
+        byGene: updatedByGene,
+        error: null,
+      };
+    }
+    case actions.BATCH_UPDATE_INTERPRETATIONS_FAILED:
+      return {
+        ...state,
+        status: "failed",
+        error: action.error,
+      };
     case actions.UPDATE_AUTHOR_NAME_REQUEST:
       return {
         ...state,
