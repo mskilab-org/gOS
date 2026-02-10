@@ -14,6 +14,7 @@ import {
   Skeleton,
   Typography,
   Select,
+  Checkbox,
 } from "antd";
 import * as d3 from "d3";
 import { roleColorMap, transitionStyle } from "../../helpers/utility";
@@ -29,7 +30,7 @@ import { buildColumnsFromSettings } from "./columnBuilders";
 
 const { Text } = Typography;
 
-const { selectFilteredEvent } = filteredEventsActions;
+const { selectFilteredEvent, setSelectedEventUids, toggleEventUidSelection } = filteredEventsActions;
 
 const EVENT_TYPES = ["all", "snv", "cna", "fusion", "complexsv"];
 
@@ -62,6 +63,70 @@ class FilteredEventsListPanel extends Component {
       selectedColumnKeys: defaultKeys,
     });
   };
+
+  handleCheckboxChange = (record, checked) => {
+    const { toggleEventUidSelection } = this.props;
+    toggleEventUidSelection(record.uid, checked);
+  };
+
+  handleHeaderCheckboxChange = (records) => {
+    const { selectedEventUids, setSelectedEventUids } = this.props;
+    
+    // Get all tier 1 and 2 records from current view
+    const tier1And2Records = records.filter(
+      (r) => r.tier && (+r.tier === 1 || +r.tier === 2)
+    );
+    const tier1And2Uids = tier1And2Records.map((r) => r.uid);
+    
+    // Check current state
+    const selectedTier1And2 = tier1And2Uids.filter((uid) =>
+      selectedEventUids.includes(uid)
+    );
+    const allSelected = selectedTier1And2.length === tier1And2Uids.length && tier1And2Uids.length > 0;
+    
+    if (allSelected) {
+      // Deselect all tier 1 and 2
+      const newUids = selectedEventUids.filter(
+        (uid) => !tier1And2Uids.includes(uid)
+      );
+      setSelectedEventUids(newUids);
+    } else {
+      // Select all tier 1 and 2
+      const newSelectedUids = [...new Set([...selectedEventUids, ...tier1And2Uids])];
+      setSelectedEventUids(newSelectedUids);
+    }
+  };
+
+  getHeaderCheckboxState = (records) => {
+    const { selectedEventUids } = this.props;
+    
+    // Get all tier 1 and 2 records from current view
+    const tier1And2Records = records.filter(
+      (r) => r.tier && (+r.tier === 1 || +r.tier === 2)
+    );
+    const tier1And2Uids = tier1And2Records.map((r) => r.uid);
+    
+    if (tier1And2Uids.length === 0) {
+      return { checked: false, indeterminate: false };
+    }
+    
+    const selectedTier1And2 = tier1And2Uids.filter((uid) =>
+      selectedEventUids.includes(uid)
+    );
+    
+    if (selectedTier1And2.length === 0) {
+      return { checked: false, indeterminate: false };
+    } else if (selectedTier1And2.length === tier1And2Uids.length) {
+      return { checked: true, indeterminate: false };
+    } else {
+      return { checked: false, indeterminate: true };
+    }
+  };
+
+  isEventSelected = (record) => {
+    const { selectedEventUids } = this.props;
+    return selectedEventUids.includes(record.uid);
+  };
   state = {
     eventType: "all",
     tierFilters: [1, 2], // start with tiers 1 & 2 checked
@@ -71,13 +136,12 @@ class FilteredEventsListPanel extends Component {
     variantFilters: [],
     geneFilters: [],
     tierCountsMap: {},
+    geneVariantsWithTierChanges: null, // Set of gene-variant keys that have tier changes
     selectedColumnKeys: [],
   };
 
   // Track if a fetch is in progress to prevent concurrent calls
   _isFetchingTierCounts = false;
-
-  // add as a class field
 
   getDefaultColumnKeys = () => {
     const { data: settingsData, dataset } = this.props;
@@ -201,7 +265,7 @@ class FilteredEventsListPanel extends Component {
 
       // If no gene-variants have tier changes, nothing to fetch
       if (geneVariantsWithTiers.size === 0) {
-        this.setState({ tierCountsMap: {} });
+        this.setState({ tierCountsMap: {}, geneVariantsWithTierChanges: geneVariantsWithTiers });
         return;
       }
 
@@ -221,7 +285,7 @@ class FilteredEventsListPanel extends Component {
 
       // Guard: nothing to fetch after filtering
       if (uniqueRecords.length === 0) {
-        this.setState({ tierCountsMap: {} });
+        this.setState({ tierCountsMap: {}, geneVariantsWithTierChanges: geneVariantsWithTiers });
         return;
       }
 
@@ -248,7 +312,7 @@ class FilteredEventsListPanel extends Component {
         await Promise.all(batchPromises);
       }
 
-      this.setState({ tierCountsMap: map });
+      this.setState({ tierCountsMap: map, geneVariantsWithTierChanges: geneVariantsWithTiers });
     } finally {
       this._isFetchingTierCounts = false;
     }
@@ -256,7 +320,14 @@ class FilteredEventsListPanel extends Component {
 
   getTierTooltipContent = (record) => {
     const key = `${record.gene}-${record.type}`;
-    const tierCounts = this.state.tierCountsMap[key];
+    const { tierCountsMap, geneVariantsWithTierChanges } = this.state;
+    
+    // Check if this gene-variant has no tier changes
+    if (geneVariantsWithTierChanges && !geneVariantsWithTierChanges.has(key)) {
+      return "No tier change";
+    }
+    
+    const tierCounts = tierCountsMap[key];
     if (!tierCounts) return "Loading tier distribution...";
     const total =
       (tierCounts[1] || 0) + (tierCounts[2] || 0) + (tierCounts[3] || 0);
@@ -340,6 +411,28 @@ class FilteredEventsListPanel extends Component {
       },
       filterValues
     );
+
+    // Checkbox column for selecting events
+    const headerCheckboxState = this.getHeaderCheckboxState(records);
+    const checkboxColumn = {
+      title: (
+        <Checkbox
+          checked={headerCheckboxState.checked}
+          indeterminate={headerCheckboxState.indeterminate}
+          onChange={() => this.handleHeaderCheckboxChange(records)}
+        />
+      ),
+      key: "select",
+      width: 50,
+      fixed: "left",
+      align: "center",
+      render: (_, record) => (
+        <Checkbox
+          checked={this.isEventSelected(record)}
+          onChange={(e) => this.handleCheckboxChange(record, e.target.checked)}
+        />
+      ),
+    };
 
     return (
       <Wrapper>
@@ -459,9 +552,10 @@ class FilteredEventsListPanel extends Component {
                   <Skeleton active loading={loading}>
                     <Table
                       columns={[
+                        checkboxColumn,
                         ...(additionalColumns || []),
                         ...columns,
-                      ].filter((col) => selectedColumnKeys.includes(col.key))}
+                      ].filter((col) => col.key === "select" || selectedColumnKeys.includes(col.key))}
                       dataSource={records}
                       pagination={{ pageSize: 50 }}
                       showSorterTooltip={false}
@@ -621,6 +715,10 @@ FilteredEventsListPanel.defaultProps = {};
 const mapDispatchToProps = (dispatch) => ({
   selectFilteredEvent: (filteredEvent, viewMode) =>
     dispatch(selectFilteredEvent(filteredEvent, viewMode)),
+  setSelectedEventUids: (uids) =>
+    dispatch(setSelectedEventUids(uids)),
+  toggleEventUidSelection: (uid, selected) =>
+    dispatch(toggleEventUidSelection(uid, selected)),
 });
 const mapStateToProps = (state) => {
   const mergedEvents = selectMergedEvents(state);
@@ -630,6 +728,7 @@ const mapStateToProps = (state) => {
     filteredEvents: mergedEvents.filteredEvents,
     originalFilteredEvents: state.FilteredEvents.originalFilteredEvents,
     selectedFilteredEvent: mergedEvents.selectedFilteredEvent,
+    selectedEventUids: state.FilteredEvents.selectedEventUids || [],
     viewMode: state.FilteredEvents.viewMode,
     error: state.FilteredEvents.error,
     id: state.CaseReport.id,

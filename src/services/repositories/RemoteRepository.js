@@ -1,6 +1,6 @@
 /**
  * Remote API implementation of EventInterpretationRepository.
- * Dummy implementation for future backend integration.
+ * Connects to a remote server via HTTP (typically accessed through SSH tunnel).
  */
 
 import { EventInterpretationRepository } from "./EventInterpretationRepository";
@@ -9,7 +9,7 @@ import EventInterpretation from "../../helpers/EventInterpretation";
 export class RemoteRepository extends EventInterpretationRepository {
   constructor(config = {}) {
     super();
-    this.baseUrl = config.baseUrl || "/api/v1";
+    this.baseUrl = config.baseUrl || null;
     this.authToken = config.authToken || null;
   }
 
@@ -24,7 +24,44 @@ export class RemoteRepository extends EventInterpretationRepository {
   }
 
   async _fetch(endpoint, options = {}) {
-    throw new Error("RemoteRepository not yet implemented - backend API pending");
+    if (!this.baseUrl) {
+      throw new Error(
+        `Remote repository requires 'remoteApiUrl' in dataset config.\n\n` +
+        `Add "remoteApiUrl": "http://localhost:6050" to your dataset entry in datasets.json\n\n` +
+        `Example:\n` +
+        `{\n` +
+        `  "id": "your-dataset",\n` +
+        `  "auditLoggingRepo": "remote",\n` +
+        `  "remoteApiUrl": "http://localhost:6050"\n` +
+        `}`
+      );
+    }
+
+    const url = `${this.baseUrl}${endpoint}`;
+
+    let response;
+    try {
+      response = await fetch(url, {
+        ...options,
+        headers: this._headers(),
+      });
+    } catch (err) {
+      if (err.name === "TypeError") {
+        throw new Error(
+          `Cannot connect to remote API at ${this.baseUrl}.\n` +
+          `Is your SSH tunnel running?\n\n` +
+          `Example: ssh -L 6050:localhost:6050 your-hpc-server`
+        );
+      }
+      throw err;
+    }
+
+    if (!response.ok) {
+      throw new Error(`Remote API error: ${response.status} ${response.statusText}`);
+    }
+
+    const text = await response.text();
+    return text ? JSON.parse(text) : null;
   }
 
   async save(interpretation) {
@@ -42,10 +79,18 @@ export class RemoteRepository extends EventInterpretationRepository {
   }
 
   async get(datasetId, caseId, alterationId, authorId) {
-    const response = await this._fetch(
-      `/datasets/${datasetId}/cases/${caseId}/interpretations/${alterationId}/${authorId}`
-    );
-    return response ? new EventInterpretation(response) : null;
+    try {
+      const response = await this._fetch(
+        `/datasets/${datasetId}/cases/${caseId}/interpretations/${alterationId}/${authorId}`
+      );
+      return response ? new EventInterpretation(response) : null;
+    } catch (err) {
+      // Return null for 404 (not found) - this is expected for new interpretations
+      if (err.message.includes("404")) {
+        return null;
+      }
+      throw err;
+    }
   }
 
   async getForCase(datasetId, caseId) {
@@ -128,5 +173,17 @@ export class RemoteRepository extends EventInterpretationRepository {
   async getTierCountsByGeneVariantType(gene, variantType) {
     const response = await this._fetch(`/genes/${gene}/variant-types/${variantType}/tier-counts`);
     return response?.counts || { 1: 0, 2: 0, 3: 0 };
+  }
+
+  async getAll() {
+    const response = await this._fetch(`/interpretations`);
+    return (response?.interpretations || []).map((data) =>
+      new EventInterpretation(data)
+    );
+  }
+
+  async getGeneVariantsWithTierChanges() {
+    const response = await this._fetch(`/interpretations/gene-variants-with-tier-changes`);
+    return new Set(response?.geneVariants || []);
   }
 }
