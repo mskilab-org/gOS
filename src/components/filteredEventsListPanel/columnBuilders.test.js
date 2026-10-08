@@ -109,6 +109,21 @@ describe("buildColumnConfig", () => {
     expect(column.width).toBe(306);
   });
 
+  test("labels the existing location column Location (IGV) without changing its data or renderer", () => {
+    const settings = require("../../../public/settings.json");
+    const translations = require("../../translations/en/common.json");
+    const definition = settings.filteredEventsColumns.find((column) => column.id === "location");
+    const record = Object.freeze({ location: "17:7577568 C>A" });
+    const column = buildColumnConfig(definition, [record], {
+      t: (key) => key.split(".").reduce((value, part) => value[part], translations),
+    });
+
+    expect(column.title).toBe("Location (IGV)");
+    expect(column.key).toBe("location");
+    expect(column.render(null, record).props.value).toBe(record.location);
+    expect(mockGetColumnRenderer).toHaveBeenLastCalledWith("location-link", "location");
+  });
+
   test("selects a renderer by view type and semantic column ID", () => {
     buildColumnConfig(
       {

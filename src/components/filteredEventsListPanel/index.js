@@ -70,9 +70,10 @@ export class FilteredEventsListPanel extends Component {
   pendingColumnWidths = {};
 
   handleResetFilters = () => {
-    const { resetColumnFilters } = this.props;
+    this.props.resetColumnFilters();
+  };
 
-    resetColumnFilters();
+  handleResetColumns = () => {
     this.initializeSelectedColumns();
     this.setState({ columnOrderKeys: [] }, () => {
       this.persistColumnLayout({ columnOrderKeys: [] });
@@ -755,6 +756,13 @@ export class FilteredEventsListPanel extends Component {
                       </Select.Option>
                     ))}
                   </Select>
+                  <Button
+                    type="link"
+                    onClick={this.handleResetColumns}
+                    className="reset-columns-btn"
+                  >
+                    {t("components.filtered-events-panel.reset-columns")}
+                  </Button>
                 </Col>
               )}
             </Row>

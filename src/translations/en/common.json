@@ -634,6 +634,7 @@
     "filtered-events-panel": {
       "select-columns": "Select Columns",
       "reset-filters": "Reset All Filters",
+      "reset-columns": "Reset Columns",
       "add-to-report": "Add To Report",
       "export": {
         "notes": "Export Report",
@@ -665,7 +666,7 @@
       "fusionCopyNumber": "Total Fusion Copies",
       "estimatedAlteredCopies": "Altered Copies",
       "role": "Role in Cancer",
-      "location": "Location",
+      "location": "Location (IGV)",
       "type": "Type",
       "variant_summary": "Variant Summary",
       "gene_summary": "Gene Summary",

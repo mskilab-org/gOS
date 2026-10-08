@@ -82,13 +82,13 @@ import ColumnPinControl from "./columnPinControl";
 import { getCurrentUserId, userAuthRepository } from "../../helpers/userAuth";
 import { COLUMN_LAYOUT_STORAGE_KEY, readColumnLayout, saveColumnLayout } from "../../helpers/filteredEventsColumnLayout";
 
-function findElementByType(node, type) {
+function findElementByType(node, type, predicate = () => true) {
   if (!React.isValidElement(node)) return null;
-  if (node.type === type) return node;
+  if (node.type === type && predicate(node)) return node;
   if (node.type === "Skeleton" && node.props.loading) return null;
 
   for (const child of React.Children.toArray(node.props.children)) {
-    const match = findElementByType(child, type);
+    const match = findElementByType(child, type, predicate);
     if (match) return match;
   }
   return null;
@@ -161,14 +161,60 @@ describe("FilteredEventsListPanel saved browser layout", () => {
     expect(restored.state.columnOrderKeys).toEqual(["tier", "gene"]);
   });
 
-  it("keeps hidden/other-dataset column preferences across a reorder and Reset Filters", () => {
-    saveColumnLayout({ columnWidths: { gene: 340, extra: 450 }, columnOrderKeys: ["gene", "extra", "tier"] });
+  it("clears filters without changing hidden columns, saved order, widths or pins", () => {
+    saveColumnLayout({
+      columnWidths: { gene: 340, extra: 450 },
+      columnOrderKeys: ["gene", "extra", "tier"],
+      pinnedColumnKeys: ["extra"],
+    });
     const panel = makePanel();
     reorder(panel);
-    expect(readColumnLayout()).toEqual({ columnWidths: { gene: 340, extra: 450 }, columnOrderKeys: ["tier", "extra", "gene"], pinnedColumnKeys: [] });
+    panel.handleColumnSelectionChange(["gene", "caller"]);
+    const previousState = { ...panel.state };
+    const previousLayout = readColumnLayout();
+    storage.setItem.mockClear();
+
     panel.handleResetFilters();
-    expect(readColumnLayout()).toEqual({ columnWidths: { gene: 340, extra: 450 }, columnOrderKeys: [], pinnedColumnKeys: [] });
-    expect(panel.state.columnWidths.gene).toBe(340);
+
+    expect(panel.props.resetColumnFilters).toHaveBeenCalledTimes(1);
+    expect(panel.state).toEqual(previousState);
+    expect(readColumnLayout()).toEqual(previousLayout);
+    expect(storage.setItem).not.toHaveBeenCalled();
+    expect(makePanel("case-2").state.columnOrderKeys).toEqual(["tier", "extra", "gene"]);
+  });
+
+  it("resets column defaults and saved order independently while retaining widths and pins", () => {
+    saveColumnLayout({
+      columnWidths: { gene: 340, extra: 450 },
+      columnOrderKeys: ["gene", "extra", "tier"],
+      pinnedColumnKeys: ["gene", "extra"],
+    });
+    const dataset = { defaultVisibleFilteredEventsColumns: ["tier", "gene"] };
+    const panel = makePanel("case-1", dataset);
+    panel.handleColumnSelectionChange(["gene"]);
+    panel.handleColumnDragStart("tier");
+    panel.state.pageSize = 10;
+    panel.state.sortState = { columnKey: "gene", order: "descend" };
+    panel.state.eventType = "snv";
+    panel.props.columnFilters = { tier: [1] };
+
+    panel.handleResetColumns();
+
+    expect(panel.state).toMatchObject({
+      selectedColumnKeys: ["tier", "gene", "caller"],
+      columnOrderKeys: [], draggingColumnKey: null,
+      columnWidths: { gene: 340, extra: 450 }, pinnedColumnKeys: ["gene", "extra"],
+      pageSize: 10, sortState: { columnKey: "gene", order: "descend" }, eventType: "snv",
+    });
+    expect(panel.props.resetColumnFilters).not.toHaveBeenCalled();
+    expect(panel.props.columnFilters).toEqual({ tier: [1] });
+    expect(readColumnLayout()).toEqual({
+      columnWidths: { gene: 340, extra: 450 }, columnOrderKeys: [], pinnedColumnKeys: ["gene", "extra"],
+    });
+    expect(makePanel("case-2", dataset).state).toMatchObject({
+      selectedColumnKeys: ["tier", "gene", "caller"], columnOrderKeys: [],
+      columnWidths: { gene: 340, extra: 450 }, pinnedColumnKeys: ["gene", "extra"],
+    });
   });
 
   it("restores pins across cases, preserves absent/hidden pins and retains them on filter reset", () => {
@@ -239,11 +285,18 @@ describe("FilteredEventsListPanel saved browser layout", () => {
     reorder(panel);
     panel.handleColumnPinToggle("gene");
     expect(panel.state).toMatchObject({ columnWidths: { gene: 350 }, columnOrderKeys: ["tier", "gene"], pinnedColumnKeys: ["gene"] });
+    panel.handleColumnSelectionChange(["tier"]);
+    panel.handleResetColumns();
+    expect(panel.state).toMatchObject({
+      columnWidths: { gene: 350 }, columnOrderKeys: [], pinnedColumnKeys: ["gene"],
+      selectedColumnKeys: ["gene", "tier", "caller"],
+    });
+    expect(panel.props.resetColumnFilters).not.toHaveBeenCalled();
   });
 });
 
 describe("FilteredEventsListPanel default visible columns", () => {
-  it("applies dataset defaults on mount and Reset Filters", () => {
+  it("applies dataset defaults on mount and Reset Columns, not Reset Filters", () => {
     const resetColumnFilters = jest.fn();
     const panel = new FilteredEventsListPanel({
       additionalColumns: [{ key: "caller-column" }],
@@ -276,6 +329,10 @@ describe("FilteredEventsListPanel default visible columns", () => {
     panel.state.selectedColumnKeys = ["gene"];
     panel.handleResetFilters();
 
+    expect(resetColumnFilters).toHaveBeenCalledTimes(1);
+    expect(panel.state.selectedColumnKeys).toEqual(["gene"]);
+
+    panel.handleResetColumns();
     expect(resetColumnFilters).toHaveBeenCalledTimes(1);
     expect(panel.state.selectedColumnKeys).toEqual([
       "tier",
@@ -516,12 +573,33 @@ describe("FilteredEventsListPanel header interactions", () => {
     expect(panel.props.setColumnFilters).toHaveBeenCalledWith({ tier: [1] });
   });
 
-  it("resets user order and drag state with defaults/configuration without losing pagination", () => {
+  it("offers a matching Reset Columns link button immediately beside the column selector", () => {
+    const panel = makePanel();
+    const controls = findElementByType(panel.render(), "Col", (element) =>
+      element.props.className === "filtered-events-column-controls"
+    );
+    const [selector, resetColumns] = React.Children.toArray(controls.props.children);
+    const resetFilters = findElementByType(panel.render(), "Button", (element) =>
+      element.props.onClick === panel.handleResetFilters
+    );
+    expect(selector.props.mode).toBe("multiple");
+    expect(resetColumns.type).toBe("Button");
+    expect(resetColumns.props).toMatchObject({
+      type: "link",
+      children: "components.filtered-events-panel.reset-columns",
+      onClick: panel.handleResetColumns,
+    });
+    expect(resetColumns.props.type).toBe(resetFilters.props.type);
+    expect(resetColumns.props.size).toBe(resetFilters.props.size);
+    expect(resetColumns.props.onClick).not.toBe(resetFilters.props.onClick);
+  });
+
+  it("resets user order and drag state with Reset Columns/configuration without losing pagination", () => {
     const panel = makePanel();
     header(panel, "gene").onColumnDragStart("gene");
     header(panel, "location").onColumnDrop("location");
     panel.state.pageSize = 10;
-    panel.handleResetFilters();
+    panel.handleResetColumns();
     expect(keys(panel)).toEqual(["select", "caller", "gene", "tier", "pinned", "location"]);
     expect(panel.state.columnOrderKeys).toEqual([]);
     header(panel, "gene").onColumnDragStart("gene");
