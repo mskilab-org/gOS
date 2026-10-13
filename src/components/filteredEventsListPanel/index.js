@@ -42,6 +42,8 @@ import getDefaultVisibleFilteredEventsColumnKeys, {
 } from "./defaultVisibleFilteredEventsColumns";
 import { applyColumnPins, moveColumnKey, orderMovableColumns } from "./columnOrder";
 import ColumnPinControl from "./columnPinControl";
+import { getTableReviewRecords, getEventNavigation, getEventNavigationKey } from "./eventNavigation";
+import { captureTableReviewPosition, restoreTableReviewPosition } from "./tableReviewPosition";
 import ResizableTitle, {
   ColumnSortControl,
   clampColumnWidth,
@@ -68,8 +70,87 @@ const getColumnTitle = (title) => {
 export class FilteredEventsListPanel extends Component {
   unmounted = false;
   pendingColumnWidths = {};
+  tableContainer = null;
+  tableReviewPosition = null;
+  tableReviewContext = null;
+  restorePositionFrame = null;
+
+  getReviewContext = () => JSON.stringify([this.props.id, this.props.dataset?.id]);
+
+  cancelPositionRestore = () => {
+    if (this.restorePositionFrame != null && typeof window !== "undefined") {
+      window.cancelAnimationFrame?.(this.restorePositionFrame);
+    }
+    this.restorePositionFrame = null;
+  };
+
+  clearReviewPosition = () => {
+    this.cancelPositionRestore();
+    this.tableReviewPosition = null;
+    this.tableReviewContext = null;
+  };
+
+  captureReviewPosition = (replace = false) => {
+    if (replace || !this.tableReviewPosition) {
+      this.cancelPositionRestore();
+      this.tableReviewPosition = captureTableReviewPosition(this.tableContainer);
+      this.tableReviewContext = this.getReviewContext();
+    }
+  };
+
+  restoreReviewPosition = () => {
+    // Ref callbacks run before componentDidUpdate during a case switch.
+    if (this.tableReviewContext !== null && this.tableReviewContext !== this.getReviewContext()) {
+      this.clearReviewPosition();
+      return;
+    }
+    const position = this.tableReviewPosition;
+    if (this.unmounted || this.props.selectedFilteredEvent || this.props.loading || !position) return;
+    if (!restoreTableReviewPosition(this.tableContainer, position)) return;
+    this.cancelPositionRestore();
+    // AntD measures its scroll container after mounting. Reapply once after that
+    // layout pass, without listening to scroll or rerendering the table.
+    if (typeof window !== "undefined" && window.requestAnimationFrame) {
+      this.restorePositionFrame = window.requestAnimationFrame(() => {
+        this.restorePositionFrame = null;
+        if (this.unmounted || this.props.selectedFilteredEvent || this.tableReviewPosition !== position) return;
+        if (restoreTableReviewPosition(this.tableContainer, position)) {
+          this.tableReviewPosition = null;
+        }
+      });
+    } else {
+      this.tableReviewPosition = null;
+    }
+  };
+
+  setTableContainer = (container) => {
+    this.tableContainer = container;
+    if (container) this.restoreReviewPosition();
+  };
+
+  handleSelectFilteredEvent = (record, viewMode) => {
+    if (record && !this.props.selectedFilteredEvent) this.captureReviewPosition(true);
+    this.props.selectFilteredEvent(record, viewMode);
+  };
+
+  handleNavigateEvent = (record, viewMode, records) => {
+    const { index } = getEventNavigation(records, record);
+    if (index < 0) return;
+    const target = records[index];
+    this.cancelPositionRestore();
+    this.tableReviewContext = this.getReviewContext();
+    this.tableReviewPosition = {
+      ...(this.tableReviewPosition || captureTableReviewPosition(this.tableContainer) || { top: 0, left: 0, height: 0 }),
+      targetKey: getEventNavigationKey(target),
+    };
+    this.setState({ currentPage: Math.floor(index / this.state.pageSize) + 1 }, () => {
+      this.props.selectFilteredEvent(target, viewMode);
+    });
+  };
 
   handleResetFilters = () => {
+    this.clearReviewPosition();
+    this.setState({ currentPage: 1 });
     this.props.resetColumnFilters();
   };
 
@@ -104,20 +185,8 @@ export class FilteredEventsListPanel extends Component {
     ),
   ];
 
-  getRecordsMatchingColumnFilters = (records, columns) => {
-    const activeFilters = (columns || []).filter(
-      (column) =>
-        Array.isArray(column.filteredValue) &&
-        column.filteredValue.length > 0 &&
-        typeof column.onFilter === "function"
-    );
-
-    return (records || []).filter((record) =>
-      activeFilters.every((column) =>
-        column.filteredValue.some((value) => column.onFilter(value, record))
-      )
-    );
-  };
+  getRecordsMatchingColumnFilters = (records, columns) =>
+    getTableReviewRecords(records || [], columns || []);
 
   handleHeaderCheckboxChange = (records) => {
     const { selectedEventUids, setSelectedEventUids } = this.props;
@@ -182,6 +251,7 @@ export class FilteredEventsListPanel extends Component {
     pinnedColumnKeys: [],
     draggingColumnKey: null,
     pageSize: 50,
+    currentPage: 1,
     filteredEventDetailsModalPresented: false,
   };
 
@@ -249,7 +319,8 @@ export class FilteredEventsListPanel extends Component {
   };
 
   handleSegmentedChange = (eventType) => {
-    this.setState({ eventType, draggingColumnKey: null });
+    this.clearReviewPosition();
+    this.setState({ eventType, currentPage: 1, draggingColumnKey: null });
   };
 
   handleColumnSelectionChange = (selectedKeys) => {
@@ -318,6 +389,17 @@ export class FilteredEventsListPanel extends Component {
   }
 
   componentDidUpdate(prevProps) {
+    const contextChanged = prevProps.id !== this.props.id ||
+      prevProps.dataset?.id !== this.props.dataset?.id;
+    const filtersChanged = JSON.stringify(prevProps.columnFilters || {}) !==
+      JSON.stringify(this.props.columnFilters || {});
+    if (contextChanged || filtersChanged) {
+      this.clearReviewPosition();
+      this.setState({ currentPage: 1 });
+    }
+    if (!contextChanged && !prevProps.selectedFilteredEvent && this.props.selectedFilteredEvent) {
+      this.captureReviewPosition();
+    }
     if (
       this.getColumnConfigurationSignature(prevProps) !==
       this.getColumnConfigurationSignature(this.props)
@@ -341,11 +423,13 @@ export class FilteredEventsListPanel extends Component {
     ) {
       this.setState({ filteredEventDetailsModalPresented: false });
     }
+    if (!contextChanged) this.restoreReviewPosition();
   }
 
   componentWillUnmount() {
     // Child header cleanup may run after the panel's own unmount callback.
     this.unmounted = true;
+    this.clearReviewPosition();
     this.pendingColumnWidths = {};
     if (typeof window !== "undefined") {
       window.removeEventListener("storage", this.handleColumnLayoutStorage);
@@ -353,6 +437,7 @@ export class FilteredEventsListPanel extends Component {
   }
 
   handleFilteredEventDetailsModalOpenChange = (presented) => {
+    if (presented) this.captureReviewPosition();
     if (presented !== this.state.filteredEventDetailsModalPresented) {
       this.setState({
         filteredEventDetailsModalPresented: presented,
@@ -442,6 +527,7 @@ export class FilteredEventsListPanel extends Component {
     this.setState({
       sortState,
       pageSize: pagination?.pageSize || this.state.pageSize,
+      currentPage: pagination?.current || this.state.currentPage,
       draggingColumnKey: null,
     });
   };
@@ -496,7 +582,6 @@ export class FilteredEventsListPanel extends Component {
       genes,
       allelic,
       igv,
-      selectFilteredEvent,
       additionalColumns,
       data,
       dataset,
@@ -516,6 +601,7 @@ export class FilteredEventsListPanel extends Component {
       pinnedColumnKeys,
       draggingColumnKey,
       pageSize,
+      currentPage,
       filteredEventDetailsModalPresented,
     } = this.state;
 
@@ -533,7 +619,7 @@ export class FilteredEventsListPanel extends Component {
       records,
       {
         t,
-        selectFilteredEvent,
+        selectFilteredEvent: this.handleSelectFilteredEvent,
         getTierTooltipContent: this.getTierTooltipContent,
         onTierChange: this.handleTierChange,
       },
@@ -612,6 +698,9 @@ export class FilteredEventsListPanel extends Component {
       records,
       selectedDataColumns
     );
+    const navigation = getEventNavigation(filteredRecords, selectedFilteredEvent);
+    const tablePage = Math.min(currentPage, Math.max(1, Math.ceil(filteredRecords.length / pageSize)));
+    const tableReleased = filteredEventDetailsSelected && filteredEventDetailsModalPresented;
     const headerCheckboxState = this.getHeaderCheckboxState(filteredRecords);
     const checkboxColumn = {
       title: (
@@ -766,24 +855,22 @@ export class FilteredEventsListPanel extends Component {
                 </Col>
               )}
             </Row>
-            {/* Keep the table through the modal entrance, then release its heavy rows. */}
-            {!(
-              filteredEventDetailsSelected &&
-              filteredEventDetailsModalPresented
-            ) && (
+            {/* Release heavy rows, but reserve their space to avoid moving the outer page. */}
               <Row
                 className="ant-panel-container ant-home-plot-container"
-                style={transitionStyle(inViewport)}
+                style={{ ...transitionStyle(inViewport), minHeight: tableReleased ? this.tableReviewPosition?.height : undefined }}
               >
-                {inViewport && (
-                  <Col className="gutter-row table-container" span={24}>
+                {inViewport && !tableReleased && (
+                  <Col ref={this.setTableContainer} className="gutter-row table-container" span={24}>
                     <Skeleton active loading={loading}>
                       <Table
                         components={{ header: { cell: ResizableTitle } }}
                         columns={visibleColumns}
                         dataSource={records}
                         rowClassName="filtered-events-event-row"
-                        pagination={{ pageSize }}
+                        rowKey={getEventNavigationKey}
+                        onRow={(record) => ({ "data-review-key": getEventNavigationKey(record) })}
+                        pagination={{ current: tablePage, pageSize }}
                         showSorterTooltip={false}
                         onChange={this.handleTableChange}
                         scroll={{ x: tableScrollWidth || "100%", y: 500 }}
@@ -793,7 +880,6 @@ export class FilteredEventsListPanel extends Component {
                   </Col>
                 )}
               </Row>
-            )}
             {filteredEventDetailsSelected &&
               createPortal(
                 <FilteredEventDetailsModal
@@ -803,6 +889,8 @@ export class FilteredEventsListPanel extends Component {
                     this.handleFilteredEventDetailsModalOpenChange
                   }
                   initialTab={viewMode}
+                  navigation={navigation}
+                  onNavigate={(record, tab) => this.handleNavigateEvent(record, tab, filteredRecords)}
                   genome={genome}
                   mutations={mutations}
                   genomeCoverage={genomeCoverage}

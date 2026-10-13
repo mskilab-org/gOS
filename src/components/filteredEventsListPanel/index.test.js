@@ -726,7 +726,7 @@ describe("FilteredEventsListPanel header interactions", () => {
     panel.props = { ...panel.props, filteredEvents: [{ uid: "event", eventType: "snv" }] };
     const table = findElementByType(panel.render(), "Table");
 
-    expect(table.props.pagination).toEqual({ pageSize: 50 });
+    expect(table.props.pagination).toEqual({ current: 1, pageSize: 50 });
     expect(table.props.scroll).toEqual({ x: expect.any(Number), y: 500 });
     expect(table.props.scroll.x).toBeGreaterThan(0);
     expect(table.props.dataSource).toBe(panel.props.filteredEvents);
@@ -808,6 +808,149 @@ describe("FilteredEventsListPanel resize commits", () => {
   });
 });
 
+describe("FilteredEventsListPanel review navigation", () => {
+  const makePanel = () => {
+    const records = Array.from({ length: 65 }, (_, i) => ({ uid: `event-${i}`, gene: `GENE${String(i).padStart(2, "0")}`, variant: `p.V${i}A`, eventType: "snv", tier: i % 2 ? 2 : 1 }));
+    const panel = new FilteredEventsListPanel({
+      t: key => key, id: "review-case", dataset: { id: "review-dataset" },
+      filteredEvents: records, originalFilteredEvents: records, selectedFilteredEvent: null,
+      selectedEventUids: [], columnFilters: {}, viewMode: "tracks", inViewport: true,
+      data: { filteredEventsColumns: [{ id: "gene" }, { id: "tier" }] }, additionalColumns: [],
+      selectFilteredEvent: jest.fn(), setColumnFilters: jest.fn(), setSelectedEventUids: jest.fn(), resetColumnFilters: jest.fn(),
+    });
+    panel.setState = (update, callback) => {
+      panel.state = { ...panel.state, ...(typeof update === "function" ? update(panel.state, panel.props) : update) };
+      callback?.();
+    };
+    panel.state.selectedColumnKeys = ["gene", "tier"];
+    buildColumnsFromSettings.mockReturnValue([
+      { key: "gene", sorter: { compare: (a, b) => a.gene.localeCompare(b.gene) } },
+      { key: "tier" },
+    ]);
+    return panel;
+  };
+  const tablePosition = () => {
+    const body = { scrollTop: 350, scrollLeft: 180, querySelectorAll: () => [] };
+    const container = { querySelector: () => body, getBoundingClientRect: () => ({ height: 620 }) };
+    return { body, container };
+  };
+
+  it("restores the controlled page and both offsets after opening and closing without navigation", () => {
+    const panel = makePanel();
+    panel.handleTableChange({ current: 3, pageSize: 10 }, {}, {});
+    const { body, container } = tablePosition();
+    panel.setTableContainer(container);
+    panel.handleSelectFilteredEvent(panel.props.filteredEvents[24], "tracks");
+    expect(panel.props.selectFilteredEvent).toHaveBeenCalledWith(panel.props.filteredEvents[24], "tracks");
+    panel.props = { ...panel.props, selectedFilteredEvent: panel.props.filteredEvents[24] };
+    panel.handleFilteredEventDetailsModalOpenChange(true);
+    expect(panel.tableReviewPosition).toMatchObject({ top: 350, left: 180, height: 620, targetKey: null });
+    const previous = panel.props;
+    panel.props = { ...previous, selectedFilteredEvent: null };
+    body.scrollTop = 0; body.scrollLeft = 0;
+    panel.componentDidUpdate(previous);
+    expect(panel.state.currentPage).toBe(3);
+    expect(body.scrollTop).toBe(350);
+    expect(body.scrollLeft).toBe(180);
+    expect(findElementByType(panel.render(), "Table").props.pagination).toEqual({ current: 3, pageSize: 10 });
+  });
+
+  it("moves the page with modal navigation and dispatches the active tab, without changing report selection", () => {
+    const panel = makePanel();
+    const records = panel.props.filteredEvents;
+    panel.handleNavigateEvent(records[50], "variantQc", records);
+    expect(panel.state.currentPage).toBe(2);
+    expect(panel.props.selectFilteredEvent).toHaveBeenCalledWith(records[50], "variantQc");
+    expect(panel.tableReviewPosition.targetKey).toContain("event-50");
+    panel.handleNavigateEvent(records[49], "plots", records);
+    expect(panel.state.currentPage).toBe(1);
+    expect(panel.props.selectFilteredEvent).toHaveBeenLastCalledWith(records[49], "plots");
+    panel.handleNavigateEvent(null, "plots", records);
+    panel.handleNavigateEvent({ uid: "filtered-out" }, "plots", records);
+    expect(panel.props.selectFilteredEvent).toHaveBeenCalledTimes(2);
+    expect(panel.props.setSelectedEventUids).not.toHaveBeenCalled();
+  });
+
+  it("supplies neighbors from the filtered and sorted result, not raw records or just one page", () => {
+    const panel = makePanel();
+    const records = panel.props.filteredEvents;
+    panel.props = { ...panel.props, selectedFilteredEvent: records[32] };
+    panel.state.sortState = { columnKey: "gene", order: "descend" };
+    buildColumnsFromSettings.mockReturnValue([
+      { key: "gene", sorter: { compare: (a, b) => a.gene.localeCompare(b.gene) } },
+      { key: "tier", filters: [{ value: 1 }], filteredValue: [1], onFilter: (value, row) => row.tier === value },
+    ]);
+    const previousDocument = global.document;
+    global.document = { body: {} };
+    try {
+      createPortal.mockClear(); panel.render();
+      const modal = createPortal.mock.calls[0][0];
+      expect(modal.props.navigation).toMatchObject({ total: 33, previous: records[34], next: records[30] });
+      modal.props.onNavigate(records[30], "plots");
+      expect(panel.props.selectFilteredEvent).toHaveBeenCalledWith(records[30], "plots");
+    } finally { global.document = previousDocument; }
+  });
+
+  it("captures a fresh opening position and never applies an old case snapshot to a new table ref", () => {
+    const panel = makePanel();
+    const { container, body } = tablePosition();
+    panel.tableContainer = container;
+    panel.handleSelectFilteredEvent(panel.props.filteredEvents[0], "detail");
+    body.scrollTop = 420;
+    panel.handleSelectFilteredEvent(panel.props.filteredEvents[1], "detail");
+    expect(panel.tableReviewPosition.top).toBe(420);
+    panel.props = { ...panel.props, id: "new-case" };
+    body.scrollTop = 0;
+    panel.setTableContainer(container);
+    expect(body.scrollTop).toBe(0);
+    expect(panel.tableReviewPosition).toBeNull();
+  });
+
+  it("cancels deferred restoration when the case changes or the panel unmounts", () => {
+    const panel = makePanel();
+    const { container, body } = tablePosition();
+    const oldWindow = global.window;
+    let restore;
+    global.window = {
+      requestAnimationFrame: jest.fn(callback => { restore = callback; return 7; }),
+      cancelAnimationFrame: jest.fn(), removeEventListener: jest.fn(),
+    };
+    try {
+      panel.tableReviewPosition = { top: 120, left: 90 };
+      panel.setTableContainer(container);
+      expect(body.scrollTop).toBe(120);
+      const previous = panel.props;
+      panel.props = { ...previous, dataset: { id: "another-dataset" } };
+      panel.componentDidUpdate(previous);
+      expect(global.window.cancelAnimationFrame).toHaveBeenCalledWith(7);
+      body.scrollTop = 5; restore();
+      expect(body.scrollTop).toBe(5);
+      panel.tableReviewPosition = { top: 100, left: 80 };
+      panel.restoreReviewPosition();
+      panel.componentWillUnmount();
+      body.scrollTop = 10; restore();
+      expect(body.scrollTop).toBe(10);
+    } finally { global.window = oldWindow; }
+  });
+
+  it("discards old position on case/dataset change and resets the page on filter/type reset", () => {
+    const panel = makePanel();
+    panel.state.currentPage = 4;
+    panel.tableReviewPosition = { top: 99, left: 25 };
+    const previous = panel.props;
+    panel.props = { ...previous, id: "other-case" };
+    panel.componentDidUpdate(previous);
+    expect(panel.state.currentPage).toBe(1);
+    expect(panel.tableReviewPosition).toBeNull();
+    panel.state.currentPage = 3;
+    panel.handleSegmentedChange("fusion");
+    expect(panel.state.currentPage).toBe(1);
+    panel.state.currentPage = 3;
+    panel.handleResetFilters();
+    expect(panel.state.currentPage).toBe(1);
+  });
+});
+
 describe("FilteredEventsListPanel pagination", () => {
   it("updates the controlled page size when the per-page selection changes", () => {
     const records = Array.from({ length: 60 }, (_, index) => ({
@@ -845,8 +988,7 @@ describe("FilteredEventsListPanel pagination", () => {
     };
 
     const table = findElementByType(panel.render(), "Table");
-    expect(table.props.pagination).toEqual({ pageSize: 50 });
-    expect(table.props.pagination.current).toBeUndefined();
+    expect(table.props.pagination).toEqual({ current: 1, pageSize: 50 });
     expect(table.props.dataSource).toBe(records);
 
     table.props.onChange({ current: 1, pageSize: 10 }, {}, {});

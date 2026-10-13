@@ -635,6 +635,7 @@
       "select-columns": "Select Columns",
       "reset-filters": "Reset All Filters",
       "reset-columns": "Reset Columns",
+      "exclude-na-values": "Exclude NA values",
       "add-to-report": "Add To Report",
       "export": {
         "notes": "Export Report",
@@ -901,6 +902,9 @@
       "methylation-intensity-coverage-y-axis2-title": "↑ Count"
     },
     "filtered-event-details-modal": {
+      "navigation": "Variant navigation",
+      "previous": "Previous",
+      "next": "Next",
       "tabs": {
         "alteration": "Alteration",
         "plots": "Plots",

@@ -1,5 +1,8 @@
 import React, { Component } from "react";
-import { Modal, Tabs, Alert, Space, Spin, Tag, Typography } from "antd";
+import { Modal, Tabs, Alert, Button, Space, Spin, Tag, Typography } from "antd";
+import { LeftOutlined, RightOutlined } from "@ant-design/icons";
+import { getEventNavigationLabel } from "../filteredEventsListPanel/eventNavigation";
+import { getReviewShortcutDirection } from "./reviewShortcuts";
 import Wrapper from "./index.style";
 
 import TracksModal from "../tracksModal";
@@ -17,6 +20,34 @@ import {
 const { Text } = Typography;
 
 export class FilteredEventDetailsModal extends Component {
+  modalRoot = React.createRef();
+  keyboardDocument = null;
+
+  componentDidMount() {
+    this.keyboardDocument = this.modalRoot.current?.ownerDocument ||
+      (typeof document !== "undefined" ? document : null);
+    // Capture before AntD's tab handler: arrows review variants, not tab focus.
+    this.keyboardDocument?.addEventListener("keydown", this.handleReviewKeyDown, true);
+  }
+
+  componentWillUnmount() {
+    this.keyboardDocument?.removeEventListener("keydown", this.handleReviewKeyDown, true);
+    this.keyboardDocument = null;
+  }
+
+  handleReviewKeyDown = (event) => {
+    const { open, navigation, onNavigate } = this.props;
+    if (!open || !this.state.contentReady || !navigation || !onNavigate) return;
+    const direction = getReviewShortcutDirection(event, this.modalRoot.current);
+    if (!direction) return;
+    event.preventDefault();
+    event.stopPropagation();
+    // Consume endpoints/repeats too, so they cannot move tab focus instead.
+    if (!event.repeat && navigation[direction]) {
+      onNavigate(navigation[direction], this.state.activeTab);
+    }
+  };
+
   constructor(props) {
     super(props);
     this.state = {
@@ -26,12 +57,17 @@ export class FilteredEventDetailsModal extends Component {
   }
 
   componentDidUpdate(prevProps) {
-    const selectionChanged =
-      prevProps.record?.uid !== this.props.record?.uid ||
-      prevProps.initialTab !== this.props.initialTab;
+    // Without arrow-key tab traversal, each tab must remain reachable with Tab.
+    if (this.props.navigation && this.props.onNavigate) {
+      this.modalRoot.current?.querySelectorAll('.filtered-event-details-tabs > .ant-tabs-nav [role="tab"]')
+        .forEach(tab => { if (tab.getAttribute("aria-disabled") !== "true") tab.tabIndex = 0; });
+    }
+    const requestedTabChanged = prevProps.initialTab !== this.props.initialTab;
     const closed = prevProps.open && !this.props.open;
+    const opened = !prevProps.open && this.props.open;
 
-    if (!selectionChanged && !closed) return;
+    // A neighbor selection changes content, not the user's chosen tab.
+    if (!requestedTabChanged && !closed && !opened) return;
 
     const nextState = {};
     const nextTab = normalizeFilteredEventDetailsTab(this.props.initialTab);
@@ -100,7 +136,7 @@ export class FilteredEventDetailsModal extends Component {
     }
 
     return (
-      <div className="filtered-event-tab-content">
+      <div className="filtered-event-tab-content" data-variant-review-shortcuts="off">
         <TracksModal {...this.getTracksProps(tab)} />
       </div>
     );
@@ -114,6 +150,42 @@ export class FilteredEventDetailsModal extends Component {
       label: t(`components.filtered-event-details-modal.tabs.${tab}`),
       children: activeTab === tab ? this.renderTabContent(tab) : null,
     }));
+  };
+
+  renderNavigation = () => {
+    const { navigation, onNavigate, t } = this.props;
+    if (!navigation) return null;
+    return (
+      <nav
+        className="filtered-event-review-navigation"
+        aria-label={t("components.filtered-event-details-modal.navigation")}
+      >
+        {["previous", "next"].map(direction => {
+          const record = navigation[direction];
+          const directionLabel = t(`components.filtered-event-details-modal.${direction}`);
+          const name = getEventNavigationLabel(record);
+          const label = name ? `${directionLabel}: ${name}` : directionLabel;
+          return (
+            <Button
+              key={direction}
+              className={`filtered-event-review-${direction}`}
+              type="text"
+              size="small"
+              disabled={!record || !onNavigate}
+              title={`${label} (${direction === "previous" ? "←" : "→"})`}
+              aria-label={label}
+              aria-keyshortcuts={direction === "previous" ? "ArrowLeft" : "ArrowRight"}
+              onClick={() => onNavigate(record, this.state.activeTab)}
+            >
+              {direction === "previous" && <LeftOutlined aria-hidden="true" />}
+              <span className="filtered-event-review-direction">{directionLabel}</span>
+              {name && <span className="filtered-event-review-name">{name}</span>}
+              {direction === "next" && <RightOutlined aria-hidden="true" />}
+            </Button>
+          );
+        })}
+      </nav>
+    );
   };
 
   renderModalContent = () => {
@@ -145,7 +217,7 @@ export class FilteredEventDetailsModal extends Component {
     if (!open) return null;
 
     return (
-      <Wrapper>
+      <Wrapper ref={this.modalRoot}>
         <Modal
           open={open}
           onCancel={onClose}
@@ -156,6 +228,7 @@ export class FilteredEventDetailsModal extends Component {
           getContainer={false}
           forceRender
         >
+          {this.renderNavigation()}
           {this.renderModalContent()}
         </Modal>
       </Wrapper>

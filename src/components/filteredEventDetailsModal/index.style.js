@@ -21,6 +21,71 @@ const Wrapper = styled.div`
     overflow: hidden;
   }
 
+  .filtered-event-review-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    margin: 0 -8px 4px;
+    flex-shrink: 0;
+  }
+
+  .filtered-event-review-navigation .ant-btn {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(50% - 8px);
+    height: 32px;
+    padding: 4px 8px;
+    border-radius: 6px;
+    box-shadow: none;
+    font-size: 13px;
+    text-align: left;
+  }
+
+  .filtered-event-review-navigation .ant-btn:not(:disabled) {
+    color: #595959;
+  }
+
+  .filtered-event-review-navigation .ant-btn:not(:disabled):hover {
+    color: #1677ff;
+    background: #f5f7fa;
+  }
+
+  .filtered-event-review-navigation .ant-btn:focus-visible {
+    outline: 2px solid #1677ff;
+    outline-offset: 2px;
+  }
+
+  .filtered-event-review-navigation .anticon {
+    flex-shrink: 0;
+    font-size: 10px;
+  }
+
+  .filtered-event-review-direction {
+    flex-shrink: 0;
+    font-weight: 500;
+  }
+
+  .filtered-event-review-name {
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    opacity: 0.85;
+  }
+
+  @media (max-width: 600px) {
+    .filtered-event-review-navigation { gap: 8px; }
+    .filtered-event-review-navigation .ant-btn {
+      gap: 4px;
+      max-width: calc(50% - 4px);
+      font-size: 12px;
+    }
+  }
+
   .filtered-event-details-tabs {
     flex: 1;
     display: flex;

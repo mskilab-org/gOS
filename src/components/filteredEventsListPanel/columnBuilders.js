@@ -2,6 +2,10 @@ import React from "react";
 import * as d3 from "d3";
 import { getColumnRenderer } from "./columnRegistry";
 import SliderFilterDropdown from "./SliderFilterDropdown";
+import {
+  normalizeNumericFilterValue,
+  parseNumericRangeFilter,
+} from "../../helpers/numericRangeFilter";
 
 const DEFAULT_COLUMN_WIDTH = 120;
 const HEADER_NARROW_GLYPH_WIDTH = 6;
@@ -104,18 +108,6 @@ function resolvePath(obj, path) {
  * buildFilters
  * Dynamically generate filter options from record data
  */
-function normalizeNumericFilterValue(value) {
-  if (typeof value === "number") {
-    return Number.isFinite(value) ? value : undefined;
-  }
-  if (typeof value !== "string" || value.trim() === "") {
-    return undefined;
-  }
-
-  const number = Number(value);
-  return Number.isFinite(number) ? number : undefined;
-}
-
 function buildFilters(records, dataIndex, filterType = "string") {
   if (!records.length) return [];
 
@@ -232,10 +224,11 @@ function buildFilter(dataIndex, filterType = "string") {
 
   if (filterType === "range") {
     return (value, record) => {
-      const [minVal, maxVal] = value.split(",").map(Number);
-      const recordVal = +resolvePath(record, dataIndex);
-      if (isNaN(recordVal)) return false;
-      return recordVal >= minVal && recordVal <= maxVal;
+      const filter = parseNumericRangeFilter(value);
+      if (!filter) return false;
+      const recordVal = normalizeNumericFilterValue(resolvePath(record, dataIndex));
+      if (recordVal === undefined) return !filter.excludeNA;
+      return recordVal >= filter.range[0] && recordVal <= filter.range[1];
     };
   }
 
@@ -245,9 +238,8 @@ function buildFilter(dataIndex, filterType = "string") {
 
 function computeRangeBounds(records, dataIndex) {
   const values = records
-    .map((d) => resolvePath(d, dataIndex))
-    .filter((v) => v != null && !isNaN(v))
-    .map(Number);
+    .map((d) => normalizeNumericFilterValue(resolvePath(d, dataIndex)))
+    .filter((v) => v !== undefined);
   if (values.length === 0) return { min: 0, max: 1, step: 0.1 };
   const min = Math.min(...values);
   const max = Math.max(...values);
@@ -335,7 +327,15 @@ export function buildColumnConfig(columnDef, records, rendererProps = {}, filter
     if (filterType === "range") {
       const { min, max, step } = computeRangeBounds(records, dataIndex);
       columnConfig.filterDropdown = (props) => (
-        <SliderFilterDropdown {...props} min={min} max={max} step={step} />
+        <SliderFilterDropdown
+          {...props}
+          min={min}
+          max={max}
+          step={step}
+          excludeNALabel={t
+            ? t("components.filtered-events-panel.exclude-na-values")
+            : "Exclude NA values"}
+        />
       );
       columnConfig.onFilter = buildFilter(dataIndex, filterType);
     } else {

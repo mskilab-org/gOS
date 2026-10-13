@@ -14,6 +14,8 @@ jest.mock("./columnRegistry", () => ({
 jest.mock("./SliderFilterDropdown", () => "SliderFilterDropdown");
 
 import React from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { Table } from "antd";
 import { buildColumnConfig } from "./columnBuilders";
 
 describe("buildColumnConfig", () => {
@@ -243,6 +245,100 @@ describe("buildColumnConfig", () => {
     expect(column.onFilter("0.3,0.4", records[0])).toBe(true);
     expect(column.onFilter("0.3,0.4", records[1])).toBe(false);
     expect(column.filteredValue).toBeNull();
+  });
+
+  describe("numeric range NA policy", () => {
+    const rangeColumn = (records, filteredValue = ["0.1,0.5"], dataIndex = "vaf") =>
+      buildColumnConfig({
+        id: "vaf", title: "VAF", dataIndex,
+        type: "numeric", filterType: "range", filterable: true, sortable: true,
+      }, records, {}, filteredValue);
+
+    test.each([undefined, null, "", "  ", "NA", "N/A", "na", "-", "invalid", NaN, Infinity, -Infinity, true, false, [], {}])(
+      "includes %p by default and excludes it only on request",
+      (vaf) => {
+        const record = Object.freeze({ vaf });
+        const column = rangeColumn([record]);
+        expect(column.onFilter("0.1,0.5", record)).toBe(true);
+        expect(column.onFilter("0.1,0.5,exclude-na", record)).toBe(false);
+        expect(column.onFilter("0,0,exclude-na", record)).toBe(false);
+      }
+    );
+
+    test.each([0, "0", 0.05, 0.1, "0.1", 0.3, 0.5, "0.5", 0.9])(
+      "retains inclusive numeric boundaries for %p in both policies",
+      (vaf) => {
+        const record = { vaf };
+        const column = rangeColumn([record]);
+        const matches = Number(vaf) >= 0.1 && Number(vaf) <= 0.5;
+        expect(column.onFilter("0.1,0.5", record)).toBe(matches);
+        expect(column.onFilter("0.1,0.5,exclude-na", record)).toBe(matches);
+        expect(column.onFilter("0,0,exclude-na", record)).toBe(Number(vaf) === 0);
+      }
+    );
+
+    test("supports nested fields and absent paths", () => {
+      for (const path of ["metrics.vaf", ["metrics", "vaf"]]) {
+        const column = rangeColumn([{ metrics: { vaf: 0.3 } }, {}], null, path);
+        expect(column.onFilter("0.1,0.5", { metrics: { vaf: 0.3 } })).toBe(true);
+        expect(column.onFilter("0.1,0.5", {})).toBe(true);
+        expect(column.onFilter("0.1,0.5,exclude-na", {})).toBe(false);
+      }
+    });
+
+    test("does not let malformed range keys pass NA rows", () => {
+      const column = rangeColumn([{}]);
+      for (const key of [null, "", "1,0", ",1", "NA,1", "0,1,unknown"]) {
+        expect(column.onFilter(key, {})).toBe(false);
+      }
+    });
+
+    test("ignores missing, blank and invalid values when computing slider bounds", () => {
+      const column = rangeColumn(["", " ", false, true, null, "NA", Infinity, "Infinity", [], {}, 0.2, "0.8"].map((vaf) => ({ vaf })));
+      expect(column.filterDropdown({}).props).toMatchObject({ min: 0.2, max: 0.8, step: 0.01 });
+      expect(rangeColumn([{ vaf: "NA" }, {}]).filterDropdown({}).props).toMatchObject({ min: 0, max: 1, step: 0.1 });
+      expect(rangeColumn([{ vaf: 0 }, { vaf: "0" }]).filterDropdown({}).props).toMatchObject({ min: 0, max: 0 });
+    });
+
+    test("passes the translated NA toggle label to the dropdown", () => {
+      const translations = require("../../translations/en/common.json");
+      const column = buildColumnConfig({ id: "depth", title: "Depth", dataIndex: "depth", filterType: "range", filterable: true }, [{ depth: 200 }], {
+        t: (key) => key.split(".").reduce((value, part) => value[part], translations),
+      });
+      expect(column.filterDropdown({}).props.excludeNALabel).toBe("Exclude NA values");
+    });
+
+    test("real AntD filtering preserves interleaved row order, other filters and explicit sorting", () => {
+      class ValueRenderer extends React.Component {
+        render() {
+          return <span>{String(this.props.value ?? "NA")}</span>;
+        }
+      }
+      mockGetColumnRenderer.mockReturnValue(ValueRenderer);
+      const records = Object.freeze([
+        { uid: "fusion", vaf: "NA", tier: 1, gene: "B" },
+        { uid: "low", vaf: 0.02, tier: 1, gene: "E" },
+        { uid: "high", vaf: 0.3, tier: 1, gene: "A" },
+        { uid: "cna", vaf: null, tier: 1, gene: "C" },
+        { uid: "other-tier", vaf: null, tier: 3, gene: "D" },
+      ].map(Object.freeze));
+      const before = [...records];
+      const tierColumn = buildColumnConfig({ id: "tier", title: "Tier", dataIndex: "tier", type: "numeric", filterable: true }, records, {}, [1]);
+      const geneColumn = buildColumnConfig({ id: "gene", title: "Gene", dataIndex: "gene", sortable: true }, records);
+      const renderedKeys = (key, sorted = false) => {
+        const view = renderToStaticMarkup(<Table
+          rowKey="uid" pagination={false} dataSource={records}
+          columns={[rangeColumn(records, key ? [key] : null), tierColumn, { ...geneColumn, sortOrder: sorted ? "ascend" : null }]}
+        />);
+        return [...view.matchAll(/data-row-key="([^"]+)"/g)].map((match) => match[1]);
+      };
+      expect(renderedKeys("0.1,0.5")).toEqual(["fusion", "high", "cna"]);
+      expect(renderedKeys("0.1,0.5,exclude-na")).toEqual(["high"]);
+      expect(renderedKeys("0.1,0.5")).toEqual(["fusion", "high", "cna"]);
+      expect(renderedKeys("0.1,0.5", true)).toEqual(["high", "fusion", "cna"]);
+      expect(renderedKeys(null)).toEqual(["fusion", "low", "high", "cna"]);
+      expect(records).toEqual(before);
+    });
   });
 
   test("keeps nonnumeric filter values distinct", () => {

@@ -1,21 +1,30 @@
 import React, { Component } from "react";
-import { Slider, Button, Space, InputNumber } from "antd";
+import { Slider, Button, Space, InputNumber, Checkbox } from "antd";
+import {
+  parseNumericRangeFilter,
+  getNumericRangeFilterKeys,
+} from "../../helpers/numericRangeFilter";
 
 class SliderFilterDropdown extends Component {
   constructor(props) {
     super(props);
-    const { min, max } = props;
-    this.state = {
+    this.state = SliderFilterDropdown.getFilterState(props);
+  }
+
+  static getFilterState({ selectedKeys, min, max }) {
+    return parseNumericRangeFilter(selectedKeys?.[0]) || {
       range: [min, max],
+      excludeNA: false,
     };
   }
 
   componentDidUpdate(prevProps) {
     if (
       prevProps.min !== this.props.min ||
-      prevProps.max !== this.props.max
+      prevProps.max !== this.props.max ||
+      prevProps.selectedKeys?.[0] !== this.props.selectedKeys?.[0]
     ) {
-      this.setState({ range: [this.props.min, this.props.max] });
+      this.setState(SliderFilterDropdown.getFilterState(this.props));
     }
   }
 
@@ -24,7 +33,6 @@ class SliderFilterDropdown extends Component {
   };
 
   handleMinChange = (value) => {
-    const { max } = this.props;
     const newMin = value != null ? value : this.props.min;
     this.setState((prev) => ({
       range: [Math.min(newMin, prev.range[1]), prev.range[1]],
@@ -32,34 +40,33 @@ class SliderFilterDropdown extends Component {
   };
 
   handleMaxChange = (value) => {
-    const { min } = this.props;
     const newMax = value != null ? value : this.props.max;
     this.setState((prev) => ({
       range: [prev.range[0], Math.max(newMax, prev.range[0])],
     }));
   };
 
+  handleExcludeNAChange = (event) => {
+    this.setState({ excludeNA: event.target.checked });
+  };
+
   handleReset = () => {
     const { min, max, clearFilters, confirm } = this.props;
-    this.setState({ range: [min, max] });
+    this.setState({ range: [min, max], excludeNA: false });
     clearFilters();
     confirm();
   };
 
   handleConfirm = () => {
     const { setSelectedKeys, confirm, min, max } = this.props;
-    const { range } = this.state;
-    if (range[0] === min && range[1] === max) {
-      setSelectedKeys([]);
-    } else {
-      setSelectedKeys([`${range[0]},${range[1]}`]);
-    }
+    const { range, excludeNA } = this.state;
+    setSelectedKeys(getNumericRangeFilterKeys(range, excludeNA, min, max));
     confirm();
   };
 
   render() {
-    const { min, max, step } = this.props;
-    const { range } = this.state;
+    const { min, max, step, excludeNALabel = "Exclude NA values" } = this.props;
+    const { range, excludeNA } = this.state;
 
     return (
       <div style={{ padding: 12, width: 280 }}>
@@ -93,6 +100,13 @@ class SliderFilterDropdown extends Component {
             style={{ width: 100 }}
           />
         </Space>
+        <Checkbox
+          checked={excludeNA}
+          onChange={this.handleExcludeNAChange}
+          style={{ display: "flex", marginBottom: 12 }}
+        >
+          {excludeNALabel}
+        </Checkbox>
         <div style={{ display: "flex", justifyContent: "space-between" }}>
           <Button size="small" onClick={this.handleReset}>
             Reset
