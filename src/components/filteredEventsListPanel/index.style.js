@@ -109,6 +109,24 @@ const Wrapper = styled.div`
     color: #1677ff;
   }
 
+  /* Like read messages: subdued cells, not opacity on the whole row/controls. */
+  .ant-table .ant-table-tbody > tr.filtered-events-event-reviewed > td {
+    background: #f5f5f5;
+    color: #595959;
+  }
+
+  .filtered-events-event-reviewed .ant-typography:not(a) {
+    color: #595959;
+  }
+
+  .ant-table .ant-table-tbody > tr.filtered-events-event-current > td {
+    background: #e6f4ff;
+  }
+
+  .ant-table .ant-table-tbody > tr.filtered-events-event-current > td:first-child {
+    box-shadow: inset 3px 0 #1677ff;
+  }
+
   .filtered-events-variant-cell {
     max-width: 200px;
   }

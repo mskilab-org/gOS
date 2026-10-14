@@ -7,15 +7,17 @@ jest.mock("react-i18next", () => ({
 jest.mock("antd", () => ({
   Alert: "Alert",
   Button: "Button",
+  Checkbox: "Checkbox",
   Modal: "Modal",
   Space: "Space",
   Spin: "Spin",
   Tabs: "Tabs",
   Tag: "Tag",
+  Tooltip: "Tooltip",
   Typography: { Text: "Text" },
 }));
 jest.mock("@ant-design/icons", () => ({ LeftOutlined: "LeftOutlined", RightOutlined: "RightOutlined" }));
-jest.mock("./reviewShortcuts", () => ({ getReviewShortcutDirection: jest.fn() }));
+jest.mock("./reviewShortcuts", () => ({ getReviewShortcutAction: jest.fn() }));
 jest.mock("../tracksModal", () => "TracksModal");
 jest.mock("../alterationCard", () => "AlterationCard");
 jest.mock("../../helpers/utility", () => ({
@@ -26,17 +28,22 @@ jest.mock("./index.style", () => "Wrapper");
 import React from "react";
 import { Modal, Spin, Tabs } from "antd";
 import { FilteredEventDetailsModal } from "./index";
-import { getReviewShortcutDirection } from "./reviewShortcuts";
+import { getReviewShortcutAction } from "./reviewShortcuts";
 
-function findElementByType(node, type) {
+function findElementByType(node, type, predicate = () => true) {
   if (!React.isValidElement(node)) return null;
-  if (node.type === type) return node;
+  if (node.type === type && predicate(node)) return node;
 
   for (const child of React.Children.toArray(node.props.children)) {
-    const match = findElementByType(child, type);
+    const match = findElementByType(child, type, predicate);
     if (match) return match;
   }
   return null;
+}
+
+function reviewCheckboxes(modal) {
+  return React.Children.toArray(modal.renderReviewControls().props.children)
+    .map(child => findElementByType(child, "Checkbox"));
 }
 
 function modalProps(overrides = {}) {
@@ -89,7 +96,7 @@ describe("FilteredEventDetailsModal", () => {
       "alteration",
       "variantQc",
     ]);
-    expect(tabs.props.items.map(({ label }) => label)).toEqual([
+    expect(tabs.props.items.map(({ label }) => label.props.children.props.children)).toEqual([
       "components.filtered-event-details-modal.tabs.plots",
       "components.filtered-event-details-modal.tabs.alteration",
       "components.filtered-event-details-modal.tabs.variantQc",
@@ -175,20 +182,36 @@ describe("FilteredEventDetailsModal", () => {
     ).toBeNull();
   });
 
+  it("renders shortcut letters as AntD keyboard keycaps with readable tooltip color", () => {
+    const modal = createModal();
+    for (const keys of [[], ["u"], ["h", "l"]]) {
+      const view = modal.renderShortcutHint("Action", keys);
+      const [label, ...keycaps] = React.Children.toArray(view.props.children);
+      expect(label.props.children).toBe("Action");
+      expect(keycaps.map(element => element.props.children)).toEqual(keys);
+      expect(keycaps.every(element => element.type === "Text" && element.props.keyboard && element.props.style.color === "inherit")).toBe(true);
+    }
+  });
+
   it("names the neighboring variants and navigates with the current modal tab", () => {
     const previous = { uid: "previous", gene: "FLT3", variant: "p.D835Y" };
     const next = { uid: "next", gene: "NPM1", variant: "p.W288fs" };
     const onNavigate = jest.fn();
     const modal = createModal({ navigation: { previous, next }, onNavigate });
     modal.handleTabChange("variantQc");
-    const buttons = React.Children.toArray(modal.renderNavigation().props.children);
-    expect(buttons.map(button => button.props.title)).toEqual([
-      "components.filtered-event-details-modal.previous: FLT3 — p.D835Y (←)",
-      "components.filtered-event-details-modal.next: NPM1 — p.W288fs (→)",
+    const hints = React.Children.toArray(modal.renderNavigation().props.children);
+    const buttons = hints.map(hint => findElementByType(hint, "Button"));
+    expect(hints.every(hint => hint.type === "Tooltip" && hint.props.mouseEnterDelay === 0 && hint.props.mouseLeaveDelay === 0)).toBe(true);
+    expect(hints.map(hint => React.Children.toArray(hint.props.title.props.children)[0].props.children)).toEqual([
+      "components.filtered-event-details-modal.previous: FLT3 — p.D835Y",
+      "components.filtered-event-details-modal.next: NPM1 — p.W288fs",
     ]);
-    expect(buttons.map(button => button.props.type)).toEqual(["text", "text"]);
+    expect(hints.map(hint => findElementByType(hint.props.title, "Text").props.children)).toEqual(["k", "j"]);
+    expect(buttons.every(button => button.props.title === undefined)).toBe(true);
+    expect(buttons.map(button => findElementByType(button, "span").props.children)).toEqual(["FLT3 — p.D835Y", "NPM1 — p.W288fs"]);
+    expect(buttons.map(button => button.props.type)).toEqual(["default", "default"]);
     expect(buttons.map(button => button.props.size)).toEqual(["small", "small"]);
-    expect(buttons.map(button => button.props["aria-keyshortcuts"])).toEqual(["ArrowLeft", "ArrowRight"]);
+    expect(buttons.map(button => button.props["aria-keyshortcuts"])).toEqual(["k ArrowLeft", "j ArrowRight"]);
     expect(findElementByType(buttons[0], "LeftOutlined")).not.toBeNull();
     expect(findElementByType(buttons[1], "RightOutlined")).not.toBeNull();
     buttons[1].props.onClick();
@@ -200,8 +223,9 @@ describe("FilteredEventDetailsModal", () => {
   it("disables missing neighbors and keeps navigation out of unrelated callers", () => {
     expect(createModal().renderNavigation()).toBeNull();
     const modal = createModal({ navigation: { previous: null, next: null }, onNavigate: jest.fn() });
-    const buttons = React.Children.toArray(modal.renderNavigation().props.children);
+    const buttons = React.Children.toArray(modal.renderNavigation().props.children).map(hint => findElementByType(hint, "Button"));
     expect(buttons.every(button => button.props.disabled)).toBe(true);
+    expect(buttons.every(button => findElementByType(button, "span").props.children === "—")).toBe(true);
   });
 
   it.each(["plots", "alteration", "variantQc"])("preserves %s while changing records and retargets tab content", (tab) => {
@@ -232,12 +256,12 @@ describe("FilteredEventDetailsModal", () => {
     modal.handleModalOpenChange(true);
     modal.handleTabChange("variantQc");
     const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
-    getReviewShortcutDirection.mockReturnValue("next");
+    getReviewShortcutAction.mockReturnValue("next");
     modal.handleReviewKeyDown(event);
     expect(event.preventDefault).toHaveBeenCalledTimes(1);
     expect(event.stopPropagation).toHaveBeenCalledTimes(1);
     expect(onNavigate).toHaveBeenCalledWith(next, "variantQc");
-    getReviewShortcutDirection.mockReturnValue("previous");
+    getReviewShortcutAction.mockReturnValue("previous");
     modal.handleReviewKeyDown(event);
     expect(onNavigate).toHaveBeenLastCalledWith(previous, "variantQc");
     const updated = { uid: "updated" };
@@ -251,7 +275,7 @@ describe("FilteredEventDetailsModal", () => {
     const modal = createModal({ navigation: { next: null }, onNavigate: jest.fn() });
     modal.handleModalOpenChange(true);
     const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
-    getReviewShortcutDirection.mockReturnValue("next");
+    getReviewShortcutAction.mockReturnValue("next");
     modal.handleReviewKeyDown(event);
     modal.props = { ...modal.props, navigation: { next: { uid: "next" } } };
     modal.handleReviewKeyDown({ ...event, repeat: true });
@@ -266,7 +290,7 @@ describe("FilteredEventDetailsModal", () => {
     if (mode === "closed") modal.props.open = false;
     if (mode === "no navigation") modal.props.navigation = null;
     if (mode === "no callback") modal.props.onNavigate = null;
-    getReviewShortcutDirection.mockReturnValue(mode === "protected" ? null : "next");
+    getReviewShortcutAction.mockReturnValue(mode === "protected" ? null : "next");
     const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
     modal.handleReviewKeyDown(event);
     expect(event.preventDefault).not.toHaveBeenCalled();
@@ -281,6 +305,94 @@ describe("FilteredEventDetailsModal", () => {
     modal.componentDidUpdate(modal.props);
     expect(enabled.tabIndex).toBe(0);
     expect(disabled.tabIndex).toBe(-1);
+  });
+
+  it("renders controlled report/review controls outside tabs with short hover hints", () => {
+    const onReportChange = jest.fn(); const onReviewedChange = jest.fn();
+    const modal = createModal({ reportSelected: true, reviewed: false, onReportChange, onReviewedChange });
+    modal.handleModalOpenChange(true);
+    const view = modal.renderReviewControls();
+    const hints = React.Children.toArray(view.props.children);
+    const checkboxes = reviewCheckboxes(modal);
+    expect(checkboxes.map(element => element.props.checked)).toEqual([true, false]);
+    expect(checkboxes.every(element => element.props.title === undefined)).toBe(true);
+    expect(hints.every(hint => hint.type === "Tooltip" && hint.props.mouseEnterDelay === 0 && hint.props.mouseLeaveDelay === 0)).toBe(true);
+    expect(hints.map(hint => React.Children.toArray(hint.props.title.props.children)[0].props.children)).toEqual([
+      "components.filtered-event-details-modal.toggle-report",
+      "components.filtered-event-details-modal.toggle-reviewed",
+    ]);
+    expect(hints.map(hint => findElementByType(hint.props.title, "Text").props.children)).toEqual(["u", "i"]);
+    checkboxes[0].props.onChange({ target: { checked: false } });
+    checkboxes[1].props.onChange({ target: { checked: true } });
+    expect(onReportChange).toHaveBeenCalledWith(false);
+    expect(onReviewedChange).toHaveBeenCalledWith(true);
+    modal.handleTabChange("plots");
+    expect(findElementByType(modal.render(), "Checkbox")).not.toBeNull();
+    const tabHint = modal.getTabItems()[0].label;
+    expect(tabHint.type).toBe("Tooltip");
+    expect(tabHint.props.mouseEnterDelay).toBe(0);
+    expect(tabHint.props.mouseLeaveDelay).toBe(0);
+    expect(tabHint.props.children.props.title).toBeUndefined();
+    expect(React.Children.toArray(tabHint.props.title.props.children).slice(1).map(element => element.props.children)).toEqual(["h", "l"]);
+  });
+
+  it("puts report/review controls before navigation for left-to-right layout and tab order", () => {
+    const modal = createModal({ navigation: {}, onNavigate: jest.fn(), onReportChange: jest.fn(), onReviewedChange: jest.fn() });
+    const view = modal.render();
+    const bar = findElementByType(view, "div", element => element.props.className === "filtered-event-review-bar");
+    expect(React.Children.toArray(bar.props.children).map(element => element.props.className)).toEqual([
+      "filtered-event-review-controls", "filtered-event-review-navigation",
+    ]);
+  });
+
+  it("dispatches h/l tab actions within the ordered boundaries", () => {
+    const modal = createModal(); modal.handleModalOpenChange(true);
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    getReviewShortcutAction.mockReturnValue("previousTab"); modal.handleReviewKeyDown(event);
+    expect(modal.state.activeTab).toBe("plots");
+    modal.handleReviewKeyDown(event); expect(modal.state.activeTab).toBe("plots");
+    getReviewShortcutAction.mockReturnValue("nextTab"); modal.handleReviewKeyDown(event);
+    expect(modal.state.activeTab).toBe("alteration");
+    modal.handleReviewKeyDown(event); expect(modal.state.activeTab).toBe("variantQc");
+    modal.handleReviewKeyDown(event); expect(modal.state.activeTab).toBe("variantQc");
+  });
+
+  it("toggles the latest controlled values with u/i and ignores held keys", () => {
+    const modal = createModal({ reportSelected: false, reviewed: true, onReportChange: jest.fn(), onReviewedChange: jest.fn() });
+    modal.handleModalOpenChange(true);
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    getReviewShortcutAction.mockReturnValue("toggleReport"); modal.handleReviewKeyDown(event);
+    expect(modal.props.onReportChange).toHaveBeenLastCalledWith(true);
+    modal.props = { ...modal.props, reportSelected: true };
+    modal.handleReviewKeyDown(event); expect(modal.props.onReportChange).toHaveBeenLastCalledWith(false);
+    getReviewShortcutAction.mockReturnValue("toggleReviewed"); modal.handleReviewKeyDown(event);
+    expect(modal.props.onReviewedChange).toHaveBeenCalledWith(false);
+    modal.handleReviewKeyDown({ ...event, repeat: true });
+    expect(modal.props.onReviewedChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("disables checkboxes while loading or without an identity/callback and shows cache failure", () => {
+    const modal = createModal({ record: {}, reviewDisabled: true, onReportChange: jest.fn(), onReviewedChange: jest.fn(), reviewCacheError: true });
+    expect(reviewCheckboxes(modal).every(control => control.props.disabled)).toBe(true);
+    modal.handleModalOpenChange(true);
+    expect(reviewCheckboxes(modal).every(control => control.props.disabled)).toBe(true);
+    expect(findElementByType(modal.render(), "Text").props.children).toBe("components.filtered-event-details-modal.review-cache-error");
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() };
+    for (const action of ["toggleReport", "toggleReviewed"]) {
+      getReviewShortcutAction.mockReturnValue(action); modal.handleReviewKeyDown(event);
+    }
+    expect(event.preventDefault).not.toHaveBeenCalled();
+    expect(modal.props.onReportChange).not.toHaveBeenCalled();
+    expect(modal.props.onReviewedChange).not.toHaveBeenCalled();
+  });
+
+  it("disables controls and shortcuts during an owning-case load", () => {
+    const modal = createModal({ actionsDisabled: true, onReportChange: jest.fn(), onReviewedChange: jest.fn() });
+    modal.handleModalOpenChange(true);
+    expect(reviewCheckboxes(modal).every(control => control.props.disabled)).toBe(true);
+    getReviewShortcutAction.mockReturnValue("toggleReport");
+    const event = { preventDefault: jest.fn(), stopPropagation: jest.fn() }; modal.handleReviewKeyDown(event);
+    expect(event.preventDefault).not.toHaveBeenCalled(); expect(modal.props.onReportChange).not.toHaveBeenCalled();
   });
 
   it("installs and removes the same capturing listener on the owning document", () => {

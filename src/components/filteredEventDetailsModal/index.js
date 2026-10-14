@@ -1,8 +1,8 @@
 import React, { Component } from "react";
-import { Modal, Tabs, Alert, Button, Space, Spin, Tag, Typography } from "antd";
+import { Modal, Tabs, Alert, Button, Checkbox, Space, Spin, Tag, Tooltip, Typography } from "antd";
 import { LeftOutlined, RightOutlined } from "@ant-design/icons";
 import { getEventNavigationLabel } from "../filteredEventsListPanel/eventNavigation";
-import { getReviewShortcutDirection } from "./reviewShortcuts";
+import { getReviewShortcutAction } from "./reviewShortcuts";
 import Wrapper from "./index.style";
 
 import TracksModal from "../tracksModal";
@@ -35,16 +35,37 @@ export class FilteredEventDetailsModal extends Component {
     this.keyboardDocument = null;
   }
 
+  isReportControlDisabled = () => !this.state.contentReady || this.props.actionsDisabled ||
+    this.props.record?.uid == null || !this.props.onReportChange;
+
+  isReviewedControlDisabled = () => !this.state.contentReady || this.props.actionsDisabled ||
+    !this.props.record || this.props.reviewDisabled || !this.props.onReviewedChange;
+
   handleReviewKeyDown = (event) => {
-    const { open, navigation, onNavigate } = this.props;
-    if (!open || !this.state.contentReady || !navigation || !onNavigate) return;
-    const direction = getReviewShortcutDirection(event, this.modalRoot.current);
-    if (!direction) return;
+    const { open, navigation, onNavigate, onReportChange, onReviewedChange, reportSelected, reviewed } = this.props;
+    if (!open || !this.state.contentReady || this.props.actionsDisabled) return;
+    const action = getReviewShortcutAction(event, this.modalRoot.current);
+    if (!action) return;
+    const variantAction = action === "previous" || action === "next";
+    if (variantAction && (!navigation || !onNavigate)) return;
+    if (action === "toggleReport" && this.isReportControlDisabled()) return;
+    if (action === "toggleReviewed" && this.isReviewedControlDisabled()) return;
     event.preventDefault();
     event.stopPropagation();
-    // Consume endpoints/repeats too, so they cannot move tab focus instead.
-    if (!event.repeat && navigation[direction]) {
-      onNavigate(navigation[direction], this.state.activeTab);
+    // Consume endpoints/repeats too, so they cannot move tab focus or toggle twice.
+    if (event.repeat) return;
+    if (variantAction) {
+      if (navigation[action]) onNavigate(navigation[action], this.state.activeTab);
+    } else if (action === "toggleReport") {
+      onReportChange(!reportSelected);
+    } else if (action === "toggleReviewed") {
+      onReviewedChange(!reviewed);
+    } else {
+      const index = FILTERED_EVENT_DETAILS_TAB_ORDER.indexOf(this.state.activeTab);
+      const nextIndex = index + (action === "previousTab" ? -1 : 1);
+      if (FILTERED_EVENT_DETAILS_TAB_ORDER[nextIndex]) {
+        this.handleTabChange(FILTERED_EVENT_DETAILS_TAB_ORDER[nextIndex]);
+      }
     }
   };
 
@@ -142,12 +163,27 @@ export class FilteredEventDetailsModal extends Component {
     );
   };
 
+  renderShortcutHint = (label, keys) => (
+    <Space size={6} wrap>
+      <span>{label}</span>
+      {keys.map(key => <Text keyboard key={key} style={{ color: "inherit" }}>{key}</Text>)}
+    </Space>
+  );
+
   getTabItems = () => {
     const { t } = this.props;
     const { activeTab } = this.state;
     return FILTERED_EVENT_DETAILS_TAB_ORDER.map((tab) => ({
       key: tab,
-      label: t(`components.filtered-event-details-modal.tabs.${tab}`),
+      label: (
+        <Tooltip
+          title={this.renderShortcutHint(t("components.filtered-event-details-modal.switch-tabs"), ["h", "l"])}
+          mouseEnterDelay={0}
+          mouseLeaveDelay={0}
+        >
+          <span>{t(`components.filtered-event-details-modal.tabs.${tab}`)}</span>
+        </Tooltip>
+      ),
       children: activeTab === tab ? this.renderTabContent(tab) : null,
     }));
   };
@@ -166,25 +202,73 @@ export class FilteredEventDetailsModal extends Component {
           const name = getEventNavigationLabel(record);
           const label = name ? `${directionLabel}: ${name}` : directionLabel;
           return (
-            <Button
+            <Tooltip
               key={direction}
-              className={`filtered-event-review-${direction}`}
-              type="text"
-              size="small"
-              disabled={!record || !onNavigate}
-              title={`${label} (${direction === "previous" ? "←" : "→"})`}
-              aria-label={label}
-              aria-keyshortcuts={direction === "previous" ? "ArrowLeft" : "ArrowRight"}
-              onClick={() => onNavigate(record, this.state.activeTab)}
+              title={this.renderShortcutHint(label, [direction === "previous" ? "k" : "j"])}
+              mouseEnterDelay={0}
+              mouseLeaveDelay={0}
             >
-              {direction === "previous" && <LeftOutlined aria-hidden="true" />}
-              <span className="filtered-event-review-direction">{directionLabel}</span>
-              {name && <span className="filtered-event-review-name">{name}</span>}
-              {direction === "next" && <RightOutlined aria-hidden="true" />}
-            </Button>
+              <span className="filtered-event-review-button">
+                <Button
+                  className={`filtered-event-review-${direction}`}
+                  type="default"
+                  size="small"
+                  disabled={!record || !onNavigate}
+                  aria-label={label}
+                  aria-keyshortcuts={direction === "previous" ? "k ArrowLeft" : "j ArrowRight"}
+                  onClick={() => onNavigate(record, this.state.activeTab)}
+                >
+                  {direction === "previous" && <LeftOutlined aria-hidden="true" />}
+                  <span className="filtered-event-review-name">{name || "—"}</span>
+                  {direction === "next" && <RightOutlined aria-hidden="true" />}
+                </Button>
+              </span>
+            </Tooltip>
           );
         })}
       </nav>
+    );
+  };
+
+  renderReviewControls = () => {
+    const { t, reportSelected, reviewed, onReportChange, onReviewedChange } = this.props;
+    if (!onReportChange && !onReviewedChange) return null;
+    return (
+      <div className="filtered-event-review-controls" role="group" aria-label={t("components.filtered-event-details-modal.review-controls")}>
+        <Tooltip
+          title={this.renderShortcutHint(t("components.filtered-event-details-modal.toggle-report"), ["u"])}
+          mouseEnterDelay={0}
+          mouseLeaveDelay={0}
+        >
+          <span className="filtered-event-review-control">
+            <Checkbox
+              checked={Boolean(reportSelected)}
+              disabled={this.isReportControlDisabled()}
+              aria-keyshortcuts="u"
+              onChange={event => onReportChange(event.target.checked)}
+            >
+              {t("components.filtered-events-panel.add-to-report")}
+            </Checkbox>
+          </span>
+        </Tooltip>
+        <Tooltip
+          title={this.renderShortcutHint(t("components.filtered-event-details-modal.toggle-reviewed"), ["i"])}
+          mouseEnterDelay={0}
+          mouseLeaveDelay={0}
+        >
+          <span className="filtered-event-review-control">
+            <Checkbox
+              checked={Boolean(reviewed)}
+              disabled={this.isReviewedControlDisabled()}
+              aria-keyshortcuts="i"
+              aria-description={t("components.filtered-event-details-modal.reviewed-description")}
+              onChange={event => onReviewedChange(event.target.checked)}
+            >
+              {t("components.filtered-event-details-modal.reviewed")}
+            </Checkbox>
+          </span>
+        </Tooltip>
+      </div>
     );
   };
 
@@ -228,7 +312,15 @@ export class FilteredEventDetailsModal extends Component {
           getContainer={false}
           forceRender
         >
-          {this.renderNavigation()}
+          <div className="filtered-event-review-bar">
+            {this.renderReviewControls()}
+            {this.renderNavigation()}
+          </div>
+          {this.props.reviewCacheError && (
+            <Text type="warning" role="status" className="filtered-event-review-cache-error">
+              {this.props.t("components.filtered-event-details-modal.review-cache-error")}
+            </Text>
+          )}
           {this.renderModalContent()}
         </Modal>
       </Wrapper>

@@ -21,13 +21,54 @@ const Wrapper = styled.div`
     overflow: hidden;
   }
 
+  .filtered-event-review-bar {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 4px 24px;
+    flex-shrink: 0;
+    margin-bottom: 4px;
+  }
+
+  .filtered-event-review-controls {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px 16px;
+    padding: 4px 0;
+  }
+
+  .filtered-event-review-control {
+    display: inline-flex;
+  }
+
+  .filtered-event-review-controls .ant-checkbox-wrapper {
+    margin-inline-start: 0;
+    white-space: nowrap;
+    font-size: 13px;
+  }
+
+  .filtered-event-review-cache-error {
+    margin-bottom: 6px;
+    font-size: 12px;
+    flex-shrink: 0;
+  }
+
   .filtered-event-review-navigation {
     display: flex;
+    flex: 1 1 300px;
+    min-width: 0;
     align-items: center;
-    justify-content: space-between;
+    justify-content: flex-end;
     gap: 16px;
-    margin: 0 -8px 4px;
-    flex-shrink: 0;
+    margin-inline-start: auto;
+  }
+
+  .filtered-event-review-button {
+    display: inline-flex;
+    flex: 0 1 auto;
+    min-width: 0;
+    max-width: calc(50% - 8px);
   }
 
   .filtered-event-review-navigation .ant-btn {
@@ -36,22 +77,25 @@ const Wrapper = styled.div`
     gap: 8px;
     flex: 0 1 auto;
     min-width: 0;
-    max-width: calc(50% - 8px);
+    width: 100%;
     height: 32px;
-    padding: 4px 8px;
+    padding: 4px 10px;
+    border: 1px solid #d9d9d9;
     border-radius: 6px;
+    background: #fafafa;
     box-shadow: none;
     font-size: 13px;
     text-align: left;
   }
 
   .filtered-event-review-navigation .ant-btn:not(:disabled) {
-    color: #595959;
+    color: #262626;
   }
 
   .filtered-event-review-navigation .ant-btn:not(:disabled):hover {
     color: #1677ff;
-    background: #f5f7fa;
+    border-color: #1677ff;
+    background: #e6f4ff;
   }
 
   .filtered-event-review-navigation .ant-btn:focus-visible {
@@ -64,24 +108,19 @@ const Wrapper = styled.div`
     font-size: 10px;
   }
 
-  .filtered-event-review-direction {
-    flex-shrink: 0;
-    font-weight: 500;
-  }
-
   .filtered-event-review-name {
     min-width: 0;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
-    opacity: 0.85;
+    font-weight: 500;
   }
 
   @media (max-width: 600px) {
-    .filtered-event-review-navigation { gap: 8px; }
+    .filtered-event-review-navigation { gap: 8px; flex-basis: 100%; }
+    .filtered-event-review-button { max-width: calc(50% - 4px); }
     .filtered-event-review-navigation .ant-btn {
       gap: 4px;
-      max-width: calc(50% - 4px);
       font-size: 12px;
     }
   }

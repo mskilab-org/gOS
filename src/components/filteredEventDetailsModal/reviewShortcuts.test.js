@@ -1,6 +1,6 @@
 /** @jest-environment node */
 import { JSDOM } from "jsdom";
-import { getReviewShortcutDirection } from "./reviewShortcuts";
+import { getReviewShortcutAction, getReviewShortcutDirection } from "./reviewShortcuts";
 
 let dom;
 let doc;
@@ -64,6 +64,33 @@ it.each(['role="dialog"', 'role="alertdialog"', 'class="ant-drawer-open"', 'clas
   overlay.style.visibility = "visible";
   overlay.getClientRects = () => [];
   expect(getReviewShortcutDirection(key(dialog), root)).toBe("next");
+});
+
+it.each([
+  ["j", "next"], ["k", "previous"], ["h", "previousTab"], ["l", "nextTab"],
+  ["u", "toggleReport"], ["i", "toggleReviewed"],
+])("maps %s to %s and protects editors/genome controls", (letter, action) => {
+  expect(getReviewShortcutAction(key(dialog, { key: letter }), root)).toBe(action);
+  const editor = doc.createElement("textarea"); dialog.appendChild(editor);
+  expect(getReviewShortcutAction(key(editor, { key: letter }), root)).toBeNull();
+  const genome = doc.createElement("div"); genome.setAttribute("data-variant-review-shortcuts", "off");
+  dialog.appendChild(genome);
+  expect(getReviewShortcutAction(key(genome, { key: letter }), root)).toBeNull();
+  expect(getReviewShortcutAction(key(dialog, { key: letter, ctrlKey: true }), root)).toBeNull();
+  expect(getReviewShortcutAction(key(dialog, { key: letter, isComposing: true }), root)).toBeNull();
+  expect(getReviewShortcutAction(key(doc.querySelector("#outside"), { key: letter }), root)).toBeNull();
+  const overlay = visible(doc.createElement("div")); overlay.setAttribute("role", "dialog"); doc.body.appendChild(overlay);
+  expect(getReviewShortcutAction(key(dialog, { key: letter }), root)).toBeNull();
+});
+
+it("allows review shortcuts on a checkbox without intercepting text inputs", () => {
+  const checkbox = doc.createElement("input"); checkbox.type = "checkbox"; dialog.appendChild(checkbox);
+  expect(getReviewShortcutAction(key(checkbox, { key: "i" }), root)).toBe("toggleReviewed");
+  expect(getReviewShortcutAction(key(checkbox, { key: "u" }), root)).toBe("toggleReport");
+});
+
+it.each(["I", "J", "H", "x", "Escape", "Tab"])("ignores non-shortcut key %s", letter => {
+  expect(getReviewShortcutAction(key(dialog, { key: letter }), root)).toBeNull();
 });
 
 it("also excludes protected controls and nested dialogs inside the modal", () => {

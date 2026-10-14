@@ -33,6 +33,12 @@ import {
   readColumnLayout,
   saveColumnLayout,
 } from "../../helpers/filteredEventsColumnLayout";
+import { getCurrentUserId, userAuthRepository } from "../../helpers/userAuth";
+import {
+  getVariantReviewStorageKey,
+  readVariantReviewStatus,
+  saveVariantReviewStatus,
+} from "../../helpers/variantReviewStatus";
 import ErrorPanel from "../errorPanel";
 import FilteredEventDetailsModal from "../filteredEventDetailsModal";
 import TierDistributionBarChart from "../tierDistributionBarChart";
@@ -74,6 +80,65 @@ export class FilteredEventsListPanel extends Component {
   tableReviewPosition = null;
   tableReviewContext = null;
   restorePositionFrame = null;
+  reviewUserId = null;
+
+  getVariantReviewScopeKey = () => getVariantReviewStorageKey({
+    userId: this.reviewUserId,
+    datasetId: this.props.dataset?.id,
+    caseId: this.props.id,
+  });
+
+  restoreVariantReviewStatus = (resetCurrent = false) => {
+    if (this.unmounted) return;
+    const reviewStorageKey = this.getVariantReviewScopeKey();
+    this.setState({
+      reviewStorageKey,
+      reviewStatus: readVariantReviewStatus(reviewStorageKey),
+      reviewCacheError: false,
+      ...(resetCurrent ? { currentReviewKey: null } : {}),
+    }, this.markCurrentEventReviewed);
+  };
+
+  handleReviewUserChanged = (user) => {
+    if (this.unmounted) return;
+    this.reviewUserId = user?.userId ?? null;
+    this.restoreVariantReviewStatus();
+  };
+
+  handleReviewedChange = (record, reviewed) => {
+    const key = getEventNavigationKey(record);
+    if (this.unmounted || this.props.loading || this.props.error || this.props.missing ||
+      key === null || typeof reviewed !== "boolean" ||
+      this.state.reviewStorageKey !== this.getVariantReviewScopeKey()) return;
+    const saved = saveVariantReviewStatus(this.state.reviewStorageKey, key, reviewed);
+    const cached = saved ? readVariantReviewStatus(this.state.reviewStorageKey) : {};
+    this.setState(previous => ({
+      reviewStatus: { ...previous.reviewStatus, ...cached, [key]: reviewed },
+      reviewCacheError: !saved,
+    }));
+  };
+
+  markCurrentEventReviewed = () => {
+    const { selectedFilteredEvent, loading, error, missing } = this.props;
+    const key = getEventNavigationKey(selectedFilteredEvent);
+    if (this.unmounted || !this.state.filteredEventDetailsModalPresented ||
+      loading || error || missing || key === null ||
+      this.state.reviewStorageKey !== this.getVariantReviewScopeKey()) return;
+    if (this.state.currentReviewKey !== key) this.setState({ currentReviewKey: key });
+    // A stored false is a deliberate clearing, not an invitation to auto-mark again.
+    if (!Object.prototype.hasOwnProperty.call(this.state.reviewStatus, key)) {
+      this.handleReviewedChange(selectedFilteredEvent, true);
+    }
+  };
+
+  getEventRowClassName = (record) => {
+    const key = getEventNavigationKey(record);
+    return [
+      "filtered-events-event-row",
+      key !== null && this.state.reviewStatus[key] === true && "filtered-events-event-reviewed",
+      key !== null && key === this.state.currentReviewKey && "filtered-events-event-current",
+    ].filter(Boolean).join(" ");
+  };
 
   getReviewContext = () => JSON.stringify([this.props.id, this.props.dataset?.id]);
 
@@ -253,6 +318,10 @@ export class FilteredEventsListPanel extends Component {
     pageSize: 50,
     currentPage: 1,
     filteredEventDetailsModalPresented: false,
+    reviewStorageKey: null,
+    reviewStatus: {},
+    reviewCacheError: false,
+    currentReviewKey: null,
   };
 
   getDefaultColumnKeys = (props = this.props) => {
@@ -363,6 +432,11 @@ export class FilteredEventsListPanel extends Component {
     if (event.key === null || event.key === COLUMN_LAYOUT_STORAGE_KEY) {
       this.restoreColumnLayout();
     }
+    if (event.key === null || event.key === "gOS_user") {
+      this.handleReviewUserChanged({ userId: getCurrentUserId() });
+    } else if (event.key === this.state.reviewStorageKey) {
+      this.restoreVariantReviewStatus();
+    }
   };
 
   persistColumnLayout = (patch) => {
@@ -383,6 +457,9 @@ export class FilteredEventsListPanel extends Component {
     this.unmounted = false;
     this.initializeSelectedColumns();
     this.restoreColumnLayout();
+    this.reviewUserId = getCurrentUserId();
+    this.restoreVariantReviewStatus();
+    userAuthRepository.emitter.on("userChanged", this.handleReviewUserChanged);
     if (typeof window !== "undefined") {
       window.addEventListener("storage", this.handleColumnLayoutStorage);
     }
@@ -397,6 +474,7 @@ export class FilteredEventsListPanel extends Component {
       this.clearReviewPosition();
       this.setState({ currentPage: 1 });
     }
+    if (contextChanged) this.restoreVariantReviewStatus(true);
     if (!contextChanged && !prevProps.selectedFilteredEvent && this.props.selectedFilteredEvent) {
       this.captureReviewPosition();
     }
@@ -423,7 +501,10 @@ export class FilteredEventsListPanel extends Component {
     ) {
       this.setState({ filteredEventDetailsModalPresented: false });
     }
-    if (!contextChanged) this.restoreReviewPosition();
+    if (!contextChanged) {
+      this.restoreReviewPosition();
+      this.markCurrentEventReviewed();
+    }
   }
 
   componentWillUnmount() {
@@ -431,6 +512,7 @@ export class FilteredEventsListPanel extends Component {
     this.unmounted = true;
     this.clearReviewPosition();
     this.pendingColumnWidths = {};
+    userAuthRepository.emitter.off("userChanged", this.handleReviewUserChanged);
     if (typeof window !== "undefined") {
       window.removeEventListener("storage", this.handleColumnLayoutStorage);
     }
@@ -442,7 +524,9 @@ export class FilteredEventsListPanel extends Component {
       this.setState({
         filteredEventDetailsModalPresented: presented,
         draggingColumnKey: null,
-      });
+      }, this.markCurrentEventReviewed);
+    } else if (presented) {
+      this.markCurrentEventReviewed();
     }
   };
 
@@ -867,7 +951,7 @@ export class FilteredEventsListPanel extends Component {
                         components={{ header: { cell: ResizableTitle } }}
                         columns={visibleColumns}
                         dataSource={records}
-                        rowClassName="filtered-events-event-row"
+                        rowClassName={this.getEventRowClassName}
                         rowKey={getEventNavigationKey}
                         onRow={(record) => ({ "data-review-key": getEventNavigationKey(record) })}
                         pagination={{ current: tablePage, pageSize }}
@@ -904,6 +988,13 @@ export class FilteredEventsListPanel extends Component {
                   chromoBins={chromoBins}
                   allelic={allelic}
                   record={selectedFilteredEvent}
+                  actionsDisabled={loading || Boolean(error) || missing}
+                  reportSelected={this.isEventSelected(selectedFilteredEvent)}
+                  onReportChange={checked => this.handleCheckboxChange(this.props.selectedFilteredEvent, checked)}
+                  reviewed={this.state.reviewStatus[getEventNavigationKey(selectedFilteredEvent)] === true}
+                  reviewDisabled={getEventNavigationKey(selectedFilteredEvent) === null}
+                  onReviewedChange={checked => this.handleReviewedChange(this.props.selectedFilteredEvent, checked)}
+                  reviewCacheError={this.state.reviewCacheError}
                 />,
                 document.body,
               )}

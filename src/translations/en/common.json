@@ -905,6 +905,13 @@
       "navigation": "Variant navigation",
       "previous": "Previous",
       "next": "Next",
+      "review-controls": "Variant review controls",
+      "reviewed": "Reviewed",
+      "toggle-report": "Toggle Add to report",
+      "toggle-reviewed": "Toggle Reviewed",
+      "switch-tabs": "Previous / next tab",
+      "reviewed-description": "Marked on first opening, not clinical approval. Saved only in this browser for the current user.",
+      "review-cache-error": "Review status could not be saved in this browser.",
       "tabs": {
         "alteration": "Alteration",
         "plots": "Plots",

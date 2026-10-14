@@ -81,6 +81,8 @@ import ResizableTitle, { ColumnSortControl } from "./resizableTitle";
 import ColumnPinControl from "./columnPinControl";
 import { getCurrentUserId, userAuthRepository } from "../../helpers/userAuth";
 import { COLUMN_LAYOUT_STORAGE_KEY, readColumnLayout, saveColumnLayout } from "../../helpers/filteredEventsColumnLayout";
+import { getVariantReviewStorageKey, readVariantReviewStatus, saveVariantReviewStatus } from "../../helpers/variantReviewStatus";
+import { getEventNavigationKey } from "./eventNavigation";
 
 function findElementByType(node, type, predicate = () => true) {
   if (!React.isValidElement(node)) return null;
@@ -154,7 +156,8 @@ describe("FilteredEventsListPanel saved browser layout", () => {
     const restored = makePanel("case-2", { id: "other-dataset", defaultVisibleFilteredEventsColumns: ["gene"] });
     expect(restored.state).toMatchObject({ columnWidths: { gene: 340 }, columnOrderKeys: ["tier", "gene"], selectedColumnKeys: ["gene", "caller"], pageSize: 50 });
     expect(Object.keys(JSON.parse(storage.getItem(COLUMN_LAYOUT_STORAGE_KEY)))).toEqual(["columnWidths", "columnOrderKeys", "pinnedColumnKeys"]);
-    expect(getCurrentUserId).not.toHaveBeenCalled();
+    // Identity is used by review status, never by the browser-wide column layout.
+    expect(getCurrentUserId).toHaveBeenCalled();
     const previousProps = restored.props;
     restored.props = { ...restored.props, dataset: { defaultVisibleFilteredEventsColumns: ["tier"] } };
     restored.componentDidUpdate(previousProps);
@@ -244,7 +247,7 @@ describe("FilteredEventsListPanel saved browser layout", () => {
     expect(readColumnLayout().columnWidths).toEqual({});
   });
 
-  it("shares one layout across sign-in, user changes and sign-out without reading identity", () => {
+  it("shares one layout across sign-in, user changes and sign-out independently of review identity", () => {
     const panel = makePanel();
     panel.handleColumnResizeStop("gene")(null, { size: { width: 440 } });
     reorder(panel);
@@ -258,8 +261,8 @@ describe("FilteredEventsListPanel saved browser layout", () => {
     }
     panel.handleColumnResizeStop("gene")(null, { size: { width: 500 } });
     expect(readColumnLayout().columnWidths.gene).toBe(500);
-    expect(getCurrentUserId).not.toHaveBeenCalled();
-    expect(userAuthRepository.emitter.listenerCount("userChanged")).toBe(0);
+    expect(getCurrentUserId).toHaveBeenCalled();
+    expect(userAuthRepository.emitter.listenerCount("userChanged")).toBe(panels.length);
   });
 
   it("refreshes only layout/clear storage events and releases subscriptions on unmount", () => {
@@ -951,6 +954,136 @@ describe("FilteredEventsListPanel review navigation", () => {
   });
 });
 
+describe("FilteredEventsListPanel personal review status", () => {
+  let oldWindow; let oldDocument; let storage; let panels;
+  const records = [{ uid: "one", gene: "TP53", variant: "p.V1A", eventType: "snv" },
+    { uid: "two", gene: "KRAS", variant: "p.G12D", eventType: "snv" }];
+  const key = record => getEventNavigationKey(record);
+  beforeEach(() => {
+    oldWindow = global.window; oldDocument = global.document; panels = [];
+    const items = new Map();
+    storage = { getItem: jest.fn(key => items.get(key) ?? null), setItem: jest.fn((key, value) => items.set(key, value)) };
+    global.window = { localStorage: storage, addEventListener: jest.fn(), removeEventListener: jest.fn() };
+    global.document = { body: {} };
+    getCurrentUserId.mockReturnValue("alice");
+    buildColumnsFromSettings.mockReturnValue([]);
+  });
+  afterEach(() => {
+    panels.forEach(panel => panel.componentWillUnmount());
+    userAuthRepository.emitter.removeAllListeners(); getCurrentUserId.mockReturnValue(null);
+    global.window = oldWindow; global.document = oldDocument;
+  });
+  const makePanel = (overrides = {}) => {
+    const panel = new FilteredEventsListPanel({ t: key => key, id: "case", dataset: { id: "dataset" },
+      filteredEvents: records, selectedFilteredEvent: null, selectedEventUids: [], columnFilters: {},
+      data: { filteredEventsColumns: [] }, inViewport: true, additionalColumns: [],
+      selectFilteredEvent: jest.fn(), setSelectedEventUids: jest.fn(), ...overrides });
+    panel.setState = (update, callback) => {
+      panel.state = { ...panel.state, ...(typeof update === "function" ? update(panel.state, panel.props) : update) }; callback?.();
+    };
+    panel.componentDidMount(); panels.push(panel); return panel;
+  };
+  const open = (panel, record = records[0]) => {
+    panel.props = { ...panel.props, selectedFilteredEvent: record };
+    panel.handleFilteredEventDetailsModalOpenChange(true);
+  };
+  it("marks only after presentation and preserves manual clearing on reopening and remount", () => {
+    const panel = makePanel();
+    panel.handleSelectFilteredEvent(records[0], "detail");
+    expect(panel.state.reviewStatus).toEqual({});
+    open(panel);
+    expect(panel.state.reviewStatus[key(records[0])]).toBe(true);
+    expect(panel.state.currentReviewKey).toBe(key(records[0]));
+    expect(panel.getEventRowClassName(records[0])).toContain("filtered-events-event-reviewed");
+    panel.handleReviewedChange(records[0], false);
+    const previous = panel.props; panel.props = { ...previous, selectedFilteredEvent: null }; panel.componentDidUpdate(previous);
+    open(panel);
+    expect(panel.state.reviewStatus[key(records[0])]).toBe(false);
+    expect(makePanel().state.reviewStatus[key(records[0])]).toBe(false);
+    const cached = readVariantReviewStatus(panel.state.reviewStorageKey, storage);
+    expect(cached[key(records[0])]).toBe(false);
+    expect(panel.props.setSelectedEventUids).not.toHaveBeenCalled();
+  });
+  it("marks neighbors, keeps the last current row on close and exposes synced report controls", () => {
+    const panel = makePanel({ selectedEventUids: ["one"] }); open(panel);
+    createPortal.mockClear(); panel.render();
+    let modal = createPortal.mock.calls[0][0];
+    expect(modal.props).toMatchObject({ reportSelected: true, reviewed: true });
+    modal.props.onReportChange(false);
+    expect(panel.props.setSelectedEventUids).toHaveBeenLastCalledWith([]);
+    const previous = panel.props; panel.props = { ...previous, selectedFilteredEvent: records[1], selectedEventUids: [] };
+    panel.componentDidUpdate(previous);
+    expect(panel.state.reviewStatus[key(records[1])]).toBe(true);
+    expect(panel.state.currentReviewKey).toBe(key(records[1]));
+    createPortal.mockClear(); panel.render(); modal = createPortal.mock.calls[0][0];
+    expect(modal.props.reportSelected).toBe(false); modal.props.onReportChange(true);
+    expect(panel.props.setSelectedEventUids).toHaveBeenLastCalledWith(["two"]);
+    modal.props.onReviewedChange(false);
+    expect(panel.state.reviewStatus[key(records[1])]).toBe(false);
+    const opened = panel.props; panel.props = { ...opened, selectedFilteredEvent: null }; panel.componentDidUpdate(opened);
+    expect(panel.getEventRowClassName(records[1])).toContain("filtered-events-event-current");
+    expect(panel.getEventRowClassName(records[1])).not.toContain("filtered-events-event-reviewed");
+    expect(panel.getEventRowClassName(records[0])).toContain("filtered-events-event-reviewed");
+  });
+  it("isolates user, anonymous, case and dataset caches without affecting column layout", () => {
+    const panel = makePanel(); open(panel); panel.handleReviewedChange(records[0], false);
+    const aliceKey = panel.state.reviewStorageKey;
+    panel.props = { ...panel.props, selectedFilteredEvent: null };
+    getCurrentUserId.mockReturnValue("bob"); userAuthRepository.emitter.emit("userChanged", { userId: "bob" });
+    expect(panel.state.reviewStatus).toEqual({});
+    expect(panel.state.reviewStorageKey).not.toBe(aliceKey);
+    open(panel); expect(panel.state.reviewStatus[key(records[0])]).toBe(true);
+    panel.props = { ...panel.props, selectedFilteredEvent: null };
+    getCurrentUserId.mockReturnValue(null); userAuthRepository.emitter.emit("userChanged", null);
+    expect(panel.state.reviewStatus).toEqual({});
+    getCurrentUserId.mockReturnValue("alice"); userAuthRepository.emitter.emit("userChanged", { userId: "alice" });
+    expect(panel.state.reviewStatus[key(records[0])]).toBe(false);
+    const previous = panel.props; panel.props = { ...previous, id: "other" }; panel.componentDidUpdate(previous);
+    expect(panel.state.reviewStatus).toEqual({}); expect(panel.state.currentReviewKey).toBeNull();
+    const otherCase = panel.props; panel.props = { ...otherCase, dataset: { id: "other" } }; panel.componentDidUpdate(otherCase);
+    expect(panel.state.reviewStorageKey).toBe(getVariantReviewStorageKey({ userId: "alice", caseId: "other", datasetId: "other" }));
+  });
+  it("refreshes only the active namespace and cross-tab identity, and removes listeners", () => {
+    const panel = makePanel();
+    saveVariantReviewStatus(panel.state.reviewStorageKey, key(records[0]), false, storage);
+    panel.handleColumnLayoutStorage({ key: "unrelated" }); expect(panel.state.reviewStatus).toEqual({});
+    panel.handleColumnLayoutStorage({ key: panel.state.reviewStorageKey }); expect(panel.state.reviewStatus[key(records[0])]).toBe(false);
+    getCurrentUserId.mockReturnValue("bob"); panel.handleColumnLayoutStorage({ key: "gOS_user" });
+    expect(panel.state.reviewStatus).toEqual({});
+    panel.componentWillUnmount(); expect(userAuthRepository.emitter.listenerCount("userChanged")).toBe(0);
+    expect(global.window.removeEventListener).toHaveBeenCalledWith("storage", panel.handleColumnLayoutStorage);
+    const before = panel.state; panel.handleReviewedChange(records[0], true); expect(panel.state).toBe(before);
+  });
+  it("fences the old case while loading and marks the new selection only when ready", () => {
+    const panel = makePanel(); open(panel);
+    const originalKey = panel.state.reviewStorageKey;
+    const previous = panel.props;
+    panel.props = { ...previous, id: "new-case", loading: true };
+    panel.componentDidUpdate(previous);
+    panel.handleReviewedChange(records[0], false);
+    expect(panel.state.reviewStatus).toEqual({});
+    expect(readVariantReviewStatus(originalKey, storage)[key(records[0])]).toBe(true);
+    createPortal.mockClear(); panel.render();
+    expect(createPortal.mock.calls[0][0].props.actionsDisabled).toBe(true);
+    const loading = panel.props;
+    panel.props = { ...loading, loading: false, selectedFilteredEvent: records[1] };
+    panel.componentDidUpdate(loading);
+    expect(panel.state.reviewStatus).toEqual({ [key(records[1])]: true });
+    expect(panel.state.currentReviewKey).toBe(key(records[1]));
+  });
+
+  it("keeps review transient and reports storage failure, without marking loading records", () => {
+    storage.setItem.mockImplementation(() => { throw new Error("full"); });
+    const panel = makePanel({ loading: true }); open(panel);
+    expect(panel.state.reviewStatus).toEqual({});
+    const previous = panel.props; panel.props = { ...previous, loading: false }; panel.componentDidUpdate(previous);
+    expect(panel.state.reviewStatus[key(records[0])]).toBe(true); expect(panel.state.reviewCacheError).toBe(true);
+    panel.handleReviewedChange(records[0], false);
+    expect(panel.state.reviewStatus[key(records[0])]).toBe(false);
+    panel.handleReviewedChange({}, true); expect(Object.keys(panel.state.reviewStatus)).toHaveLength(1);
+  });
+});
+
 describe("FilteredEventsListPanel pagination", () => {
   it("updates the controlled page size when the per-page selection changes", () => {
     const records = Array.from({ length: 60 }, (_, index) => ({
@@ -1257,7 +1390,7 @@ describe("FilteredEventsListPanel filtered event details presentation", () => {
       const filteredEventDetailsModal = createPortal.mock.calls[0][0];
 
       expect(openingTable).not.toBeNull();
-      expect(openingTable.props.rowClassName).toBe(
+      expect(openingTable.props.rowClassName(selectedEvent)).toBe(
         "filtered-events-event-row",
       );
       expect(filteredEventDetailsModal.type).toBe(
