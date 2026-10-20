@@ -266,7 +266,8 @@ export function buildColumnConfig(columnDef, records, rendererProps = {}, filter
     dataIndex,
     viewType = "string-basic",
     width = DEFAULT_COLUMN_WIDTH,
-    sortable = false,
+    sortable = true,
+    filterable = true,
     filterSearch = true,
     ellipsis = false,
     rendererProps: columnRendererProps = {},
@@ -327,9 +328,9 @@ export function buildColumnConfig(columnDef, records, rendererProps = {}, filter
     },
   };
 
-  // Every configured data column is filterable, including dataset additions
-  // and legacy definitions with filterable: false. Only user selections activate it.
-  if (records && records.length > 0) {
+  // Merged column definitions default to enabled controls; explicit false opts out.
+  // Filters remain inactive until the user selects values.
+  if (filterable && records && records.length > 0) {
     if (filterType === "range") {
       const { min, max, step } = computeRangeBounds(records, dataIndex);
       columnConfig.filterDropdown = (props) => (

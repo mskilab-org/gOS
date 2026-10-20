@@ -25,7 +25,7 @@ describe("buildColumnConfig", () => {
   });
   const getWidthForTitle = (title, width = 1) =>
     buildColumnConfig(
-      { id: "value", title, dataIndex: "value", width },
+      { id: "value", title, dataIndex: "value", width, sortable: false },
       []
     ).width;
 
@@ -100,6 +100,7 @@ describe("buildColumnConfig", () => {
         title: "components.filtered-events-panel.alphaMissense",
         dataIndex: "alphaMissense",
         width: 80,
+        sortable: false,
       },
       [],
       { t }
@@ -144,20 +145,22 @@ describe("buildColumnConfig", () => {
     );
   });
 
-  test("reserves space for automatic filters as well as optional sorter controls", () => {
+  test("reserves space only for enabled filter and sorter controls", () => {
     const definition = {
       id: "status", title: "Header", dataIndex: "status", width: 1,
     };
     const records = [{ status: "A" }];
-    const emptyColumn = buildColumnConfig(definition, []);
-    const filteredColumn = buildColumnConfig(definition, records);
-    const filteredAndSortedColumn = buildColumnConfig(
-      { ...definition, sortable: true }, records,
+    const emptyColumn = buildColumnConfig({ ...definition, sortable: false }, []);
+    const filteredColumn = buildColumnConfig({ ...definition, sortable: false }, records);
+    const filteredAndSortedColumn = buildColumnConfig(definition, records);
+    const disabledColumn = buildColumnConfig(
+      { ...definition, filterable: false, sortable: false }, records,
     );
 
     expect(emptyColumn.width).toBe(99);
     expect(filteredColumn.width).toBe(115);
     expect(filteredAndSortedColumn.width).toBe(131);
+    expect(disabledColumn.width).toBe(99);
     expect(filteredAndSortedColumn.filters).toEqual([
       { text: "A", value: "A" },
     ]);
@@ -170,8 +173,8 @@ describe("buildColumnConfig", () => {
       filteredAndSortedColumn.render(undefined, { status: "A" }).props.value
     ).toBe("A");
   });
-  test.each([undefined, false, true])(
-    "enables searchable, inactive filters regardless of legacy filterable=%s",
+  test.each([undefined, true])(
+    "enables searchable, inactive filters for omitted or true filterable=%s",
     (filterable) => {
       const column = buildColumnConfig(
         { id: "location", dataIndex: "location", filterable },
@@ -187,6 +190,88 @@ describe("buildColumnConfig", () => {
       expect(column.onFilter("1:100 A>G", { location: "2:200 C>T" })).toBe(false);
     },
   );
+
+  test.each([
+    [{}, true, true],
+    [{ filterable: true, sortable: true }, true, true],
+    [{ filterable: false }, false, true],
+    [{ sortable: false }, true, false],
+    [{ filterable: false, sortable: false }, false, false],
+  ])("defaults both controls on and honours independent overrides %p", (flags, filterEnabled, sortEnabled) => {
+    const column = buildColumnConfig(
+      { id: "status", dataIndex: "status", ...flags },
+      [{ status: "A" }, { status: "B" }],
+    );
+    expect(typeof column.onFilter === "function").toBe(filterEnabled);
+    expect(typeof column.sorter?.compare === "function").toBe(sortEnabled);
+    if (filterEnabled) {
+      expect(column.filteredValue).toBeNull();
+      expect(column.onFilter("A", { status: "A" })).toBe(true);
+    }
+    if (sortEnabled) {
+      expect(column.sorter.compare({ status: "A" }, { status: "B" })).toBe(-1);
+    }
+  });
+
+  test.each([
+    { id: "status", dataIndex: "status" },
+    { id: "depth", dataIndex: "depth", type: "numeric" },
+    { id: "impact", dataIndex: "impact", viewType: "class-icon" },
+    { id: "depth", dataIndex: "depth", type: "numeric", filterType: "range" },
+  ])("disables categorical filters and range dropdowns for explicit false: %p", (definition) => {
+    const records = [{ status: "A", depth: 10, impact: { class: "benign", score: 0.1 } }];
+    const column = buildColumnConfig({ ...definition, filterable: false }, records, {}, ["stale-selection"]);
+    for (const property of ["filters", "filterDropdown", "onFilter", "filterSearch", "filterMultiple", "filteredValue"]) {
+      expect(column).not.toHaveProperty(property);
+    }
+    expect(typeof column.sorter.compare).toBe("function");
+    expect(getTableReviewRecords(records, [column])).toEqual(records);
+  });
+
+  test("omits filters without records but still enables the default sorter", () => {
+    const column = buildColumnConfig({ id: "depth", dataIndex: "depth", type: "numeric" }, []);
+    expect(column).not.toHaveProperty("filters");
+    expect(column).not.toHaveProperty("onFilter");
+    expect(column.sorter.compare({ depth: 2 }, { depth: 10 })).toBe(-1);
+  });
+
+  test.each([
+    [{}, {}, true, true],
+    [{ filterable: true, sortable: true }, { filterable: false, sortable: false }, false, false],
+    [{ filterable: false, sortable: false }, {}, false, false],
+    [{ filterable: false, sortable: false }, { filterable: true, sortable: true }, true, true],
+    [{ filterable: true, sortable: true }, { filterable: false }, false, true],
+    [{ filterable: true, sortable: true }, { sortable: false }, true, false],
+  ])("respects dataset column overrides without losing inherited flags: %p / %p", (settingsFlags, datasetFlags, filterEnabled, sortEnabled) => {
+    const settings = Object.freeze([Object.freeze({ id: "status", dataIndex: "status", ...settingsFlags })]);
+    const dataset = Object.freeze([Object.freeze({ id: "status", title: "Dataset status", ...datasetFlags })]);
+    const column = buildColumnsFromSettings(settings, dataset, [{ status: "A" }])[0];
+    expect(column.title).toBe("Dataset status");
+    expect(typeof column.onFilter === "function").toBe(filterEnabled);
+    expect(typeof column.sorter?.compare === "function").toBe(sortEnabled);
+    expect(settings[0]).toEqual({ id: "status", dataIndex: "status", ...settingsFlags });
+    expect(dataset[0]).toEqual({ id: "status", title: "Dataset status", ...datasetFlags });
+  });
+
+  test("dataset-added annotation icons default to class filters and existing score sorting", () => {
+    const ids = ["alphaMissense", "sift", "polyphen"];
+    // Synthetic annotations test configuration semantics, not clinical predictions.
+    const records = [
+      Object.fromEntries(ids.map((id) => [id, { class: "benign", score: 0.1 }])),
+      Object.fromEntries(ids.map((id) => [id, { class: "pathogenic", score: 0.9 }])),
+    ];
+    const columns = buildColumnsFromSettings([], ids.map((id) => ({ id, dataIndex: id, viewType: "class-icon" })), records);
+    columns.forEach((column) => {
+      expect(column.filters).toEqual([
+        { text: "benign", value: "benign" },
+        { text: "pathogenic", value: "pathogenic" },
+      ]);
+      expect(column.onFilter("pathogenic", records[1])).toBe(true);
+      expect(column.onFilter("pathogenic", records[0])).toBe(false);
+      expect(column.sorter.compare(records[0], records[1])).toBe(1);
+      expect(column.render(null, records[0]).props.value).toBe(records[0][column.key]);
+    });
+  });
 
   test("enables every built-in data column without changing its configured filter kind", () => {
     const { filteredEventsColumns } = require("../../../public/settings.json");
@@ -216,7 +301,7 @@ describe("buildColumnConfig", () => {
     const columns = buildColumnsFromSettings(
       [{ id: "gene", dataIndex: "gene", filterable: false }],
       [
-        { id: "gene", title: "Gene", filterable: false },
+        { id: "gene", title: "Gene", filterable: true },
         { id: "pillar", dataIndex: "annotations.pillar" },
         { id: "score", dataIndex: ["annotations", "score"], type: "numeric", filterType: "range" },
         { id: "impact", dataIndex: "impact", viewType: "class-icon" },
