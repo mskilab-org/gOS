@@ -16,7 +16,8 @@ jest.mock("./SliderFilterDropdown", () => "SliderFilterDropdown");
 import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { Table } from "antd";
-import { buildColumnConfig } from "./columnBuilders";
+import { buildColumnConfig, buildColumnsFromSettings } from "./columnBuilders";
+import { getTableReviewRecords } from "./eventNavigation";
 
 describe("buildColumnConfig", () => {
   beforeEach(() => {
@@ -143,30 +144,19 @@ describe("buildColumnConfig", () => {
     );
   });
 
-  test("allows separately for Ant filter and sorter header controls", () => {
-    const buildColumn = (controls) =>
-      buildColumnConfig(
-        {
-          id: "status",
-          title: "Header",
-          dataIndex: "status",
-          width: 1,
-          ...controls,
-        },
-        [{ status: "A" }]
-      );
+  test("reserves space for automatic filters as well as optional sorter controls", () => {
+    const definition = {
+      id: "status", title: "Header", dataIndex: "status", width: 1,
+    };
+    const records = [{ status: "A" }];
+    const emptyColumn = buildColumnConfig(definition, []);
+    const filteredColumn = buildColumnConfig(definition, records);
+    const filteredAndSortedColumn = buildColumnConfig(
+      { ...definition, sortable: true }, records,
+    );
 
-    const plainColumn = buildColumn({});
-    const filteredColumn = buildColumn({ filterable: true });
-    const sortedColumn = buildColumn({ sortable: true });
-    const filteredAndSortedColumn = buildColumn({
-      filterable: true,
-      sortable: true,
-    });
-
-    expect(plainColumn.width).toBe(99);
+    expect(emptyColumn.width).toBe(99);
     expect(filteredColumn.width).toBe(115);
-    expect(sortedColumn.width).toBe(115);
     expect(filteredAndSortedColumn.width).toBe(131);
     expect(filteredAndSortedColumn.filters).toEqual([
       { text: "A", value: "A" },
@@ -180,6 +170,116 @@ describe("buildColumnConfig", () => {
       filteredAndSortedColumn.render(undefined, { status: "A" }).props.value
     ).toBe("A");
   });
+  test.each([undefined, false, true])(
+    "enables searchable, inactive filters regardless of legacy filterable=%s",
+    (filterable) => {
+      const column = buildColumnConfig(
+        { id: "location", dataIndex: "location", filterable },
+        [{ location: "1:100 A>G" }, { location: "2:200 C>T" }],
+      );
+      expect(column.filters).toEqual([
+        { text: "1:100 A>G", value: "1:100 A>G" },
+        { text: "2:200 C>T", value: "2:200 C>T" },
+      ]);
+      expect(column.filterSearch).toBe(true);
+      expect(column.filteredValue).toBeNull();
+      expect(column.onFilter("1:100 A>G", { location: "1:100 A>G" })).toBe(true);
+      expect(column.onFilter("1:100 A>G", { location: "2:200 C>T" })).toBe(false);
+    },
+  );
+
+  test("enables every built-in data column without changing its configured filter kind", () => {
+    const { filteredEventsColumns } = require("../../../public/settings.json");
+    const records = [{ location: "1:100 A>G", gene: "GENE", tier: 3, vaf: 0.4 }];
+    const columns = buildColumnsFromSettings(filteredEventsColumns, [], records);
+    expect(columns).toHaveLength(filteredEventsColumns.length);
+    columns.forEach((column, index) => {
+      expect(typeof column.onFilter).toBe("function");
+      expect(column.filteredValue).toBeNull();
+      if (filteredEventsColumns[index].filterType === "range") {
+        expect(typeof column.filterDropdown).toBe("function");
+      } else {
+        expect(Array.isArray(column.filters)).toBe(true);
+        expect(column.filterSearch).toBe(true);
+      }
+    });
+    expect(columns.find((column) => column.key === "tier").filters).toEqual([
+      { text: 3, value: 3 },
+    ]);
+  });
+
+  test("supports dataset overrides and additions, nested fields, ranges and annotation classes", () => {
+    const records = [
+      { gene: "A", annotations: { pillar: "unsettled", score: 0.2 }, impact: { class: "benign" } },
+      { gene: "B", annotations: { pillar: "other", score: 0.9 }, impact: { class: "pathogenic" } },
+    ];
+    const columns = buildColumnsFromSettings(
+      [{ id: "gene", dataIndex: "gene", filterable: false }],
+      [
+        { id: "gene", title: "Gene", filterable: false },
+        { id: "pillar", dataIndex: "annotations.pillar" },
+        { id: "score", dataIndex: ["annotations", "score"], type: "numeric", filterType: "range" },
+        { id: "impact", dataIndex: "impact", viewType: "class-icon" },
+      ],
+      records, {}, { pillar: ["unsettled"], score: ["0.1,0.5"] },
+    );
+    expect(columns.map((column) => column.key)).toEqual(["gene", "pillar", "score", "impact"]);
+    expect(columns[0].title).toBe("Gene");
+    expect(columns[0].onFilter("A", records[0])).toBe(true);
+    expect(columns[1].filteredValue).toEqual(["unsettled"]);
+    expect(columns[1].onFilter("unsettled", records[1])).toBe(false);
+    expect(columns[2].filterDropdown({}).props).toMatchObject({ min: 0.2, max: 0.9 });
+    expect(columns[2].onFilter("0.1,0.5", records[0])).toBe(true);
+    expect(columns[3].filters).toEqual([
+      { text: "benign", value: "benign" },
+      { text: "pathogenic", value: "pathogenic" },
+    ]);
+    expect(columns[3].onFilter("pathogenic", records[1])).toBe(true);
+    expect(getTableReviewRecords(records, columns)).toEqual([records[0]]);
+  });
+
+  test.each([
+    { id: "annotation", viewType: "clinvar-icon" },
+    { id: "clinvar", viewType: "formatted-number" },
+  ])("filters ClinVar badges by source class for %p", (definition) => {
+    const record = { annotation: { class: "pathogenic", score: 1 } };
+    const column = buildColumnConfig({ ...definition, dataIndex: "annotation" }, [record]);
+    expect(column.filters).toEqual([{ text: "pathogenic", value: "pathogenic" }]);
+    expect(column.onFilter("pathogenic", record)).toBe(true);
+    expect(column.onFilter("benign", record)).toBe(false);
+  });
+
+  test("real AntD leaves source classifications unrestricted until the user filters and restores all rows on reset", () => {
+    class ValueRenderer extends React.Component {
+      render() {
+        return <span>{String(this.props.value ?? "NA")}</span>;
+      }
+    }
+    mockGetColumnRenderer.mockReturnValue(ValueRenderer);
+    const records = Object.freeze([
+      { uid: "germline", origin: "germline", pillar: "unsettled", location: "1:100" },
+      { uid: "somatic", origin: "non-germline", pillar: "unsettled", location: "1:200" },
+      { uid: "uncertain", origin: "uncertain", pillar: "other", location: "1:300" },
+      { uid: "missing", origin: null, pillar: null, location: "1:400" },
+    ].map(Object.freeze));
+    const definitions = ["origin", "pillar", "location"].map((id) => ({ id, dataIndex: id }));
+    const renderedKeys = (filters = {}) => {
+      const columns = buildColumnsFromSettings(definitions, [], records, {}, filters);
+      const markup = renderToStaticMarkup(
+        <Table rowKey="uid" pagination={false} dataSource={records} columns={columns} />,
+      );
+      const keys = [...markup.matchAll(/data-row-key="([^"]+)"/g)].map((match) => match[1]);
+      expect(getTableReviewRecords(records, columns).map((record) => record.uid)).toEqual(keys);
+      return keys;
+    };
+    expect(renderedKeys()).toEqual(["germline", "somatic", "uncertain", "missing"]);
+    expect(renderedKeys({ origin: ["germline", "non-germline"] })).toEqual(["germline", "somatic"]);
+    expect(renderedKeys({ pillar: ["unsettled"], location: ["1:200"] })).toEqual(["somatic"]);
+    expect(renderedKeys({ origin: ["uncertain"] })).toEqual(["uncertain"]);
+    expect(renderedKeys()).toEqual(["germline", "somatic", "uncertain", "missing"]);
+    expect(records[0]).toMatchObject({ origin: "germline", pillar: "unsettled" });
+  });
+
   test("normalizes and deduplicates finite numeric filter values", () => {
     const column = buildColumnConfig(
       {

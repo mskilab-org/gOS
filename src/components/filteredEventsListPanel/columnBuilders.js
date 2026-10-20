@@ -266,19 +266,24 @@ export function buildColumnConfig(columnDef, records, rendererProps = {}, filter
     dataIndex,
     viewType = "string-basic",
     width = DEFAULT_COLUMN_WIDTH,
-    filterable = false,
     sortable = false,
-    filterSearch = false,
+    filterSearch = true,
     ellipsis = false,
     rendererProps: columnRendererProps = {},
     fields,
   } = columnDef;
 
-  // Auto-detect type for class-icon viewType (expects object with {class, score, desc})
+  // Keep the configured render/sort type unchanged.
   const type = columnDef.type || (viewType === "class-icon" ? "object" : "string");
-  
-  // Derive filterType from type if not explicitly specified
-  const filterType = columnDef.filterType || (type === "numeric" ? "numeric" : type === "object" ? "object" : "string");
+
+  // Annotation badges expose their source class, not the object itself, as a
+  // filter choice. ClinVar also has a semantic ID renderer override.
+  const isClassAnnotation =
+    viewType === "class-icon" || viewType === "clinvar-icon" || id === "clinvar";
+  const filterType = columnDef.filterType || (
+    type === "numeric" ? "numeric" :
+    type === "object" || isClassAnnotation ? "object" : "string"
+  );
 
   // Extract the t function from rendererProps (if provided by component)
   const { t, ...otherProps } = rendererProps;
@@ -322,8 +327,9 @@ export function buildColumnConfig(columnDef, records, rendererProps = {}, filter
     },
   };
 
-  // Add filters if enabled
-  if (filterable && records && records.length > 0) {
+  // Every configured data column is filterable, including dataset additions
+  // and legacy definitions with filterable: false. Only user selections activate it.
+  if (records && records.length > 0) {
     if (filterType === "range") {
       const { min, max, step } = computeRangeBounds(records, dataIndex);
       columnConfig.filterDropdown = (props) => (
