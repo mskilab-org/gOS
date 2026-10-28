@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { visualElementAnchor } from "../../helpers/visualElementLinks";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
 import { Row, Col, Image } from "antd";
@@ -71,7 +72,7 @@ class BinQcTab extends Component {
           className="ant-panel-container ant-home-plot-container"
           gutter={16}
         >
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...visualElementAnchor("ppfit")}>
             <BinPlotPanel />
           </Col>
         </Row>
@@ -80,7 +81,7 @@ class BinQcTab extends Component {
             className="ant-panel-container ant-home-plot-container"
             gutter={16}
           >
-            <Col className="gutter-row" span={24}>
+            <Col className="gutter-row" span={24} {...visualElementAnchor("multiplicity-fit")}>
               {multiplicityError ? (
                 this.renderAssetError(imageFile, multiplicityError)
               ) : imagePresent && imageFile ? (
@@ -105,7 +106,7 @@ class BinQcTab extends Component {
             gutter={16}
           >
             {(purpleSunrisePresent || purpleError) && (
-              <Col className="gutter-row" span={12}>
+              <Col className="gutter-row" span={12} {...visualElementAnchor("purple-image")}>
                 {purpleError ? (
                   this.renderAssetError("purple_sunrise_pp.png", purpleError)
                 ) : (
@@ -124,7 +125,7 @@ class BinQcTab extends Component {
               </Col>
             )}
             {(hetsnpsImagePresent || hetsnpsError) && (
-              <Col className="gutter-row" span={12}>
+              <Col className="gutter-row" span={12} {...visualElementAnchor("allelic-fit")}>
                 {hetsnpsError ? (
                   this.renderAssetError("hetsnps_major_minor.png", hetsnpsError)
                 ) : (

@@ -103,4 +103,11 @@ describe("static manifests", () => {
       getManifestRequestConfig({ datafilesPath: "datafiles.json" }).responseType,
     ).toBe("json");
   });
+
+  it("decodes Arrow provenance while preserving native JSON provenance", () => {
+    const provenance = { schemaVersion: 1, artifacts: [{ path: "coverage.arrow", sources: [{ path: "/source", fingerprintAtUse: { size: 123, mtime: 100.123456 } }] }] };
+    expect(normalizeManifestRecord({ pair: "P", provenance: JSON.stringify(provenance) }).provenance).toEqual(provenance);
+    expect(normalizeManifestRecord({ pair: "P", provenance }).provenance).toEqual(provenance);
+    expect(normalizeManifestRecord({ pair: "P", provenance: "invalid" }).caseReportId).toBe("P");
+  });
 });

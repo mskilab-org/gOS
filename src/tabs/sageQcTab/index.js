@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { visualElementAnchor } from "../../helpers/visualElementLinks";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
 import { Row, Col, Image, Space, Select, Tag } from "antd";
@@ -146,7 +147,7 @@ export class SageQcTab extends Component {
               gutter={16}
               key="1"
             >
-              <Col className="gutter-row" span={24}>
+              <Col className="gutter-row" span={24} {...visualElementAnchor("variant-qc")}>
                 <DensityPlotPanel
                   loading={loading}
                   loadingPercentage={loadingPercentage}
@@ -270,7 +271,7 @@ export class SageQcTab extends Component {
             key="2"
           >
             {(coverageOriginalPresent || originalImageError) && (
-              <Col className="gutter-row" span={12}>
+              <Col className="gutter-row" span={12} {...visualElementAnchor("coverage-original")}>
                 {originalImageError ? (
                   this.renderAssetError(
                     "coverage_cn_boxplot_original.png",
@@ -292,7 +293,7 @@ export class SageQcTab extends Component {
               </Col>
             )}
             {(coverageDenoisedPresent || denoisedImageError) && (
-              <Col className="gutter-row" span={12}>
+              <Col className="gutter-row" span={12} {...visualElementAnchor("coverage-denoised")}>
                 {denoisedImageError ? (
                   this.renderAssetError(
                     "coverage_cn_boxplot_denoised.png",

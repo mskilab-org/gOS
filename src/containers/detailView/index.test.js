@@ -25,6 +25,7 @@ jest.mock("../../tabs/populationTab", () => "PopulationTab");
 jest.mock("../../tabs/sageQcTab", () => "SageQcTab");
 jest.mock("../../tabs/binQCTab", () => "BinQCTab");
 jest.mock("../../tabs/signaturesTab", () => "SignaturesTab");
+jest.mock("../../tabs/provenanceTab", () => "ProvenanceTab");
 jest.mock("./index.style", () => "Wrapper");
 
 import { DetailView } from "./index";
@@ -37,6 +38,7 @@ const availability = (overrides = {}) => ({
   4: true,
   5: true,
   6: true,
+  7: true,
   ...overrides,
 });
 

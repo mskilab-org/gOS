@@ -12,6 +12,8 @@ import PopulationTab from "../../tabs/populationTab";
 import SageQcTab from "../../tabs/sageQcTab";
 import BinQCTab from "../../tabs/binQCTab";
 import SignaturesTab from "../../tabs/signaturesTab";
+import ProvenanceTab from "../../tabs/provenanceTab";
+import VisualElementNavigation from "../../components/visualElementNavigation";
 import settingsActions from "../../redux/settings/actions";
 import {
   firstEnabledDetailTab,
@@ -74,10 +76,12 @@ export class DetailView extends Component {
       4: <SageQcTab />,
       5: <BinQCTab />,
       6: <SignaturesTab />,
+      7: <ProvenanceTab />,
     };
-    let tabsOrder = [0, 1, 2, 3, 4, 5, 6];
+    let tabsOrder = [0, 1, 2, 3, 4, 5, 6, 7];
     return (
       <Wrapper>
+        <VisualElementNavigation caseId={pair} tab={tab} />
         <Skeleton active loading={loading}>
           <Affix offsetTop={0}>
             <div className="ant-home-header-container">
@@ -94,7 +98,7 @@ export class DetailView extends Component {
               onChange={(tab) => this.handleTabChanged(tab)}
               items={tabsOrder.map((key) => ({
                 key: key.toString(),
-                label: t(`containers.detail-view.tabs.tab${key}`),
+                label: key === 7 ? t("containers.detail-view.tabs.tab7", "Provenance") : t(`containers.detail-view.tabs.tab${key}`),
                 children: tabs[key],
                 disabled: tabAvailability[key] === false,
               }))}

@@ -28,6 +28,14 @@ const normalizeSummaryTags = (record = {}) =>
         .filter((entry) => entry.length > 0) || [];
 
 export const normalizeManifestRecord = (record = {}, dataset = {}) => {
+  let provenance = record.provenance;
+  if (typeof provenance === "string") {
+    try {
+      provenance = JSON.parse(provenance);
+    } catch (error) {
+      provenance = null;
+    }
+  }
   const caseReportId =
     record.caseReportId ??
     record.case_id_clean ??
@@ -49,6 +57,7 @@ export const normalizeManifestRecord = (record = {}, dataset = {}) => {
 
   return {
     ...record,
+    provenance,
     datasetId: dataset.id == null ? null : `${dataset.id}`,
     caseReportId:
       caseReportId == null || `${caseReportId}`.trim() === ""

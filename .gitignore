@@ -104,3 +104,8 @@ report/
 gOS.code-workspace
 .yarn/install-state.gz
 releases/
+
+Screenshot*png
+HANDOFF.md
+Rplots.pdf
+var.mean.loess.pdf

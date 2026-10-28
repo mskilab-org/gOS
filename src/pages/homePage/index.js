@@ -7,13 +7,16 @@ import Wrapper from "./index.style";
 import { Skeleton } from "antd";
 import LandingPage from "../landingPage";
 import DetailPage from "../detailPage";
+import PipelinePage from "../pipelinePage";
 
 class HomePage extends Component {
   render() {
     const { report, loading } = this.props;
     return (
       <Wrapper>
-        {report ? (
+        {new URL(window.location.href).searchParams.get("view") === "pipeline" ? (
+          <PipelinePage />
+        ) : report ? (
           <Skeleton active loading={loading}>
             <DetailPage />
           </Skeleton>

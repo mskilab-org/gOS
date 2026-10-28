@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { visualElementAnchor } from "../../helpers/visualElementLinks";
 import { PropTypes } from "prop-types";
 import { connect } from "react-redux";
 import {
@@ -317,7 +318,7 @@ export class TracksModal extends Component {
           )}
         </Col>
         {!genome.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("genome") : {})}>
             <GenomePanel
               {...{
                 loading: genome.loading,
@@ -336,7 +337,7 @@ export class TracksModal extends Component {
           </Col>
         )}
         {genomeCoverage && !genomeCoverage.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("coverage") : {})}>
             <ScatterPlotPanel
               {...{
                 loading: genomeCoverage.loading,
@@ -501,7 +502,7 @@ export class TracksModal extends Component {
           </Col>
         )}
         {hetsnps && !hetsnps.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("hetsnps") : {})}>
             <ScatterPlotPanel
               {...{
                 loading: hetsnps.loading,
@@ -554,7 +555,7 @@ export class TracksModal extends Component {
           </Col>
         )}
         {allelic && !allelic.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("allelic") : {})}>
             <GenomePanel
               {...{
                 loading: allelic.loading,
@@ -573,7 +574,7 @@ export class TracksModal extends Component {
           </Col>
         )}
         {mutations && !mutations?.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("mutations") : {})}>
             <MutationsPanel
               {...{
                 loading: mutations.loading,
@@ -593,7 +594,7 @@ export class TracksModal extends Component {
           </Col>
         )}
         {!igv.missing && (
-          <Col className="gutter-row" span={24}>
+          <Col className="gutter-row" span={24} {...(viewType === "inline" ? visualElementAnchor("igv") : {})}>
             <IgvPanel
               {...{
                 loading: igv.loading,

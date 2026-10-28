@@ -60,6 +60,7 @@ describe("detail tab availability", () => {
       4: false,
       5: false,
       6: false,
+      7: true,
     });
   });
 
@@ -141,6 +142,7 @@ describe("firstEnabledDetailTab", () => {
         4: false,
         5: false,
         6: false,
+        7: false,
       })
     ).toBeNull();
   });

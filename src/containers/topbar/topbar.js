@@ -2,7 +2,7 @@ import React, { Component } from "react";
 import { connect } from "react-redux";
 import { withRouter } from "react-router-dom";
 import { withTranslation } from "react-i18next";
-import { Layout, Space, Spin, Select, Avatar, Progress, Typography } from "antd";
+import { Layout, Space, Spin, Select, Avatar, Progress, Typography, Button } from "antd";
 import { LoadingOutlined } from "@ant-design/icons";
 import TopbarWrapper from "./topbar.style";
 import SignInButton from "./signInButton";
@@ -189,6 +189,17 @@ export class Topbar extends Component {
                       </Option>
                     ))}
                   </Select>
+                  <Button href={(() => {
+                    const url = new URL(window.location.href);
+                    const pipeline = url.searchParams.get("view") === "pipeline";
+                    url.searchParams.delete("report");
+                    url.searchParams.delete("tab");
+                    if (pipeline) url.searchParams.delete("view");
+                    else url.searchParams.set("view", "pipeline");
+                    return url.toString();
+                  })()}>
+                    {new URL(window.location.href).searchParams.get("view") === "pipeline" ? "Cases" : "Pipeline"}
+                  </Button>
                   <Select
                     showSearch
                     value={searchFilters.texts}

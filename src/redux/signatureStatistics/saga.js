@@ -20,10 +20,7 @@ function* fetchData(action) {
     const { sigprofiler_sbs_count, sigprofiler_indel_count } = metadata;
 
     // Convert relative dataPath to absolute URL
-    const baseUrl = window.location.origin;
-    const absoluteDataPath = dataset.dataPath.startsWith("http")
-      ? dataset.dataPath
-      : `${baseUrl}/${dataset.dataPath}`;
+    const absoluteDataPath = new URL(dataset.dataPath, window.location.href).href;
 
     const requiredFiles = [
       `${absoluteDataPath}${id}/mutation_catalog.json`,

@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { visualElementAnchor } from "../../helpers/visualElementLinks";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
 import { Skeleton, Affix, Segmented, Space, Tag } from "antd";
@@ -20,8 +21,8 @@ class SignaturesTab extends Component {
   state = {
     signatureKPIMode: "total",
     signatureFractionMode: "count",
-    signatureDistributionMode: "population",
-    mutationFilter: "sbs",
+    signatureDistributionMode: window.location.hash === "#visual-decomposed" ? "decomposed" : "population",
+    mutationFilter: new URLSearchParams(window.location.search).get("signatureType") === "indel" ? "indel" : "sbs",
   };
 
   handleSignatureKPIsTumourSegmentedChange = (signatureKPIMode) => {
@@ -118,7 +119,7 @@ class SignaturesTab extends Component {
             />
           ) : (
             <>
-              <Affix offsetTop={144}>
+              <div {...visualElementAnchor("catalog")}><Affix offsetTop={144}>
                 <BarPlotPanel
                   loading={loading}
                   dataPoints={catalog}
@@ -147,7 +148,7 @@ class SignaturesTab extends Component {
                     this.handleMutationCatalogSegmentedChange
                   }
                 />
-              </Affix>
+              </Affix></div>
               <br />
               <Space>
                 <Segmented
@@ -209,6 +210,7 @@ class SignaturesTab extends Component {
 
               {signatureDistributionMode === "decomposed" && (
                 <Space
+                  {...visualElementAnchor("decomposed")}
                   direction="vertical"
                   size="middle"
                   style={{

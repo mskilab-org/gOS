@@ -1,4 +1,4 @@
-export const DETAIL_TAB_KEYS = ["0", "1", "2", "3", "4", "5", "6"];
+export const DETAIL_TAB_KEYS = ["0", "1", "2", "3", "4", "5", "6", "7"];
 
 export const sourceKeepsTabEnabled = (source) =>
   Boolean(
@@ -64,6 +64,7 @@ export const getDetailTabAvailability = (state = {}) => {
         snvplicity.hetsnpsImageError
       ),
     6: sourceKeepsTabEnabled(state.SignatureStatistics),
+    7: true,
   };
 };
 

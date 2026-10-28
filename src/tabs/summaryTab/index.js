@@ -1,4 +1,5 @@
 import React, { Component } from "react";
+import { visualElementAnchor } from "../../helpers/visualElementLinks";
 import { withTranslation } from "react-i18next";
 import { connect } from "react-redux";
 import {
@@ -83,7 +84,7 @@ class SummaryTab extends Component {
 
         return {
           key: field.id,
-          label: field.title,
+          label: <span {...visualElementAnchor(`metadata-${field.id}`)}>{field.title}</span>,
           children: field.isNumeric ? (
             d3.format(field.format)(value)
           ) : field.isPair ? (
@@ -114,19 +115,21 @@ class SummaryTab extends Component {
       <Wrapper>
         <Skeleton active loading={loading}>
           {!highlightsMissing && (
-            <>
+            <div {...visualElementAnchor("highlights")}>
               <HighlightsPanel title={t("components.highlights-panel.title")} />
               <br />
-            </>
+            </div>
           )}
           <Collapse
             ghost
+            defaultActiveKey={window.location.hash.startsWith("#visual-metadata") ? [0] : []}
             items={[
               {
                 key: 0,
                 label: <Space>{t("components.metadata-panel.header")}</Space>,
                 children: (
                   <Card
+                    {...visualElementAnchor("metadata")}
                     size="small"
                     title={
                       <Space>

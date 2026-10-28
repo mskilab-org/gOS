@@ -117,7 +117,7 @@ export class IgvPanel extends Component {
             explanationTitle={t(
               "components.genome-panel.error.explanation.title"
             )}
-            explanationDescription={error}
+            explanationDescription={error.stack || error.toString()}
           />
         ) : (
           <Card
