@@ -50,6 +50,10 @@ elements to files, metadata JSON pointers, and source roles. The initial
 required set is metadata, total copy number, coverage, and filtered events;
 datasets can override definitions or add artifacts. Actual inputs come from
 successful Skilift reader receipts; profile roles do not establish provenance.
+Automatic registration includes `paired`, `ffpe_normal`, `heme`, and `tumor_only`.
+Only paired uses the paired profile; the other three explicitly reuse the tumor-only
+profile while preserving their actual `pipeline.study` for expected-case filtering.
+Review/unmatched remain delivery diagnostics and are never registered as runnable datasets.
 
 `inputSnapshots` lists explicit upload input tables and expected cases. `sourceSets`
 supports multiple runs for the optional remapping catalog. `export_cohort.R` is a
@@ -139,9 +143,11 @@ Operational files live under
 
 - `pipeline_monitor.json`: monitor configuration and explicit Batch24 opt-in.
 - `monitor_pipeline.sh`: invokes this repository's scanner.
-- `ingest_gtc.sh`: runs the scanner after the normal zero-argument ingestion scan.
+- `ingest_gtc.sh`: runs the scanner after zero-argument scans or exactly `--submit`.
 
-The existing scrontab invokes ingestion hourly at minute 17. Inventory is published
+The Slurm scrontab runs ingestion with `--submit` daily at **05:17** controller-local time.
+Installed 2026-10-28 after synthetic Slurm controller jobs 28894422–28894425 completed
+successfully. The existing two-observation readiness gate is unchanged. Inventory is published
 at `/external/imielinskilab/mskiweb/hadik01/case-reports-builds/pipeline/inventory.json`.
 The UI polls that JSON every minute; **Refresh observations** reloads the most recent
 filesystem scan, rather than initiating one.
@@ -185,8 +191,8 @@ captured pipeline-test upload. The original historical backfill is superseded by
 captured-only monitoring, so unrelated rerun candidates no longer generate stale
 warnings.
 The no-argument ingestion wrapper was exercised on 2026-10-16 at 16:32 UTC and
-successfully refreshed one dataset with no scan errors. The hourly scheduler's
-next invocation has not yet been observed.
+successfully refreshed one dataset with no scan errors. The next daily scheduled
+invocation after the 2026-10-28 launch cutover has not yet been observed.
 
 ### Completed captured Batch24 test upload (2026-10-16)
 

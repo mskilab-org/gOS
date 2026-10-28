@@ -111,6 +111,35 @@ class MonitorTests(unittest.TestCase):
         self.assertEqual(len(datasets), 1)
         self.assertFalse(register_new_batches(config, datasets, ledger))
 
+    def test_all_runnable_studies_keep_case_scope_and_applicability(self):
+        batch = self.root / "nextflow" / "mixed"
+        sheets = batch / "samplesheets"
+        sheets.mkdir(parents=True)
+        studies = ("paired", "ffpe_normal", "heme", "tumor_only")
+        all_labels = (*studies, "review", "unmatched", "ffpe")
+        for study in all_labels:
+            (sheets / ("samplesheet_" + study + ".csv")).write_text(
+                "patient,pair,sample,status\n{0},{0},{0},1\n".format(study))
+        (sheets / "manifest_inventory.csv").write_text(
+            "sample,pair,study_label,reason\n" + "".join(
+                "{0},{0},{0},\n".format(study) for study in all_labels))
+        ledger = {"destination": str(batch.parent), "deliveries": {
+            "new": {"status": "complete", "target": str(batch)}}}
+        config = {"newBatchDataRoot": str(self.root / "gos"),
+                  "newBatchDataUrl": "/gos/", "inventoryUrl": "/inventory.json"}
+        datasets = []
+        self.assertTrue(register_new_batches(config, datasets, ledger))
+        self.assertEqual({d["pipeline"]["study"] for d in datasets}, set(studies))
+        self.assertFalse(register_new_batches(config, datasets, ledger))
+        profiles = read_json(HERE / "profiles.json")
+        for dataset in datasets:
+            study = dataset["pipeline"]["study"]
+            result = scan_dataset(dataset, profiles)
+            self.assertEqual([case["caseId"] for case in result["cases"]], [study])
+            for artifact in result["cases"][0]["artifacts"]:
+                if artifact.get("pairedOnly") and study != "paired":
+                    self.assertEqual(artifact["status"], "not-applicable")
+
     def test_opt_in_restored_and_incomplete_delivery_manifest_visible(self):
         sheet = self.root / "inventory.csv"
         sheet.write_text("sample,pair,study_label,reason\nT,P,paired,\nU,U,unmatched,no inventory mapping\n")

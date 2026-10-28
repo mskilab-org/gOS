@@ -382,7 +382,7 @@ def register_new_batches(config, datasets, ledger):
         target = Path(record["target"])
         if target.resolve().parent != destination:
             raise ValueError("Ingestion target outside destination: " + str(target))
-        for study in ("paired", "tumor_only"):
+        for study in ("paired", "ffpe_normal", "heme", "tumor_only"):
             sheet = target / "samplesheets" / ("samplesheet_" + study + ".csv")
             if not sheet.is_file() or not csv_rows(sheet):
                 continue
@@ -397,7 +397,7 @@ def register_new_batches(config, datasets, ledger):
             datasets.append({"id": dataset_id, "title": target.name + " · " + study,
                              "reference": config.get("newBatchReference", "hg19"),
                              "dataPath": data_url, "datafilesPath": data_url + "datafiles.json",
-                             "pipeline": {"schemaVersion": 1, "profile": "wgs-" + study + "-v1",
+                             "pipeline": {"schemaVersion": 1, "profile": "wgs-paired-v1" if study == "paired" else "wgs-tumor_only-v1",
                                           "batchId": target.name, "study": study,
                                           "inventoryPath": config["inventoryUrl"],
                                           "dataRoot": str(data_root), "datafilesLocalPath": str(manifest),
