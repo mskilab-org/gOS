@@ -6,6 +6,7 @@ import {
 } from "./utility";
 import { reportFilters } from "./filters";
 import { getNumericFilterExtent } from "./numericFilterExtent";
+import { normalizeNumericFilterValue } from "./numericRangeFilter";
 import {
   datasetHasField,
   getSourceScopedFieldValue,
@@ -39,6 +40,32 @@ const nonEmptyFilterEntries = (searchFilters = {}) =>
   );
 
 const normalizeValues = (value) => (Array.isArray(value) ? value : [value]);
+
+// Identity and event selections still require an explicit match.
+const STRICT_FILTER_FIELDS = new Set([
+  "datasetId",
+  "sourceDatasetTitle",
+  "caseReportId",
+  "id",
+  "pair",
+  "patient_id",
+  "tags",
+]);
+
+const isMetadataFieldAbsent = (record, path) => {
+  if (Object.prototype.hasOwnProperty.call(record, path)) return false;
+
+  let value = record;
+  for (const key of `${path}`.split(".")) {
+    // A present but unusable parent (e.g. qc: null) is not absent metadata.
+    if (value == null || typeof value !== "object" || Array.isArray(value)) {
+      return false;
+    }
+    if (!Object.prototype.hasOwnProperty.call(value, key)) return true;
+    value = value[key];
+  }
+  return false;
+};
 
 const recordMatchesSelection = (recordValue, selectedValue) => {
   if (selectedValue === "null") return recordValue == null;
@@ -208,6 +235,9 @@ export const filterCaseReportRecords = (
 
     if (fallbackFilter?.external || field?.external) return;
 
+    const ignoresAbsentField = (record) =>
+      !STRICT_FILTER_FIELDS.has(key) && isMetadataFieldAbsent(record, key);
+
     if (key === "texts") {
       const searchText = `${selectedValue}`.toLowerCase();
       const searchableFields = fields.filter(
@@ -229,8 +259,10 @@ export const filterCaseReportRecords = (
       if (!range) return;
       records = records.filter(
         (record) =>
-          recordHasField(record, key) &&
-          specimenDateMatchesRangeFilter(recordFieldValue(record, key), range),
+          !range.invalid &&
+          (ignoresAbsentField(record) ||
+            (recordHasField(record, key) &&
+              specimenDateMatchesRangeFilter(recordFieldValue(record, key), range))),
       );
       return;
     }
@@ -239,27 +271,22 @@ export const filterCaseReportRecords = (
       // Reset can submit an empty extent, serialized as [null, null] when saved.
       if (selectedValue.every((value) => value == null)) return;
 
-      // Match the form's full source extent, before any filters or visibility checks.
+      // Untouched full-range sliders are inactive, including in saved queries.
       const extent = getNumericFilterExtent(
         sourceRecords.map((record) => recordFieldValue(record, key)).flat(),
       );
       if (
         selectedValue.length === 2 &&
         extent[0] != null &&
-        Number(selectedValue[0]) === Number(extent[0]) &&
-        Number(selectedValue[1]) === Number(extent[1])
-      ) {
-        // Untouched sliders must not exclude datasets that omit the field.
-        return;
-      }
+        Number(selectedValue[0]) === extent[0] &&
+        Number(selectedValue[1]) === extent[1]
+      ) return;
 
       records = records.filter((record) => {
+        if (ignoresAbsentField(record)) return true;
         if (!recordHasField(record, key)) return false;
-        const value = recordFieldValue(record, key);
-        return (
-          value == null ||
-          (value >= selectedValue[0] && value <= selectedValue[1])
-        );
+        const value = normalizeNumericFilterValue(recordFieldValue(record, key));
+        return value >= selectedValue[0] && value <= selectedValue[1];
       });
       return;
     }
@@ -268,10 +295,11 @@ export const filterCaseReportRecords = (
       const selectedValues = normalizeValues(selectedValue);
       records = records.filter(
         (record) =>
-          recordHasField(record, key) &&
-          selectedValues.some((item) =>
-            recordMatchesSelection(recordFieldValue(record, key), item),
-          ),
+          ignoresAbsentField(record) ||
+          (recordHasField(record, key) &&
+            selectedValues.some((item) =>
+              recordMatchesSelection(recordFieldValue(record, key), item),
+            )),
       );
       return;
     }
@@ -284,6 +312,7 @@ export const filterCaseReportRecords = (
         recordMatchesSelection(recordFieldValue(record, key), item);
 
       records = records.filter((record) => {
+        if (ignoresAbsentField(record)) return true;
         if (operator === "AND") {
           return selectedValues.every((item) => matches(record, item));
         }

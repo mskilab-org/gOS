@@ -145,7 +145,7 @@ describe("mixed-schema slider defaults", () => {
     expect(pageRecords).toEqual(matchedRecords.slice(5, 10));
   });
 
-  it("keeps narrowed ranges active and excludes source-omitted values", () => {
+  it("keeps narrowed ranges active and rejects present schema-omitted values", () => {
     const sourceRecords = reports.map((record) => ({ ...record, snv_count: 3 }));
     sourceRecords[1].snv_count = 9;
     expect(search({ snv_count: [3, 5] }, sourceRecords).map(
@@ -154,7 +154,7 @@ describe("mixed-schema slider defaults", () => {
     expect(search({
       sourceDatasetTitle: ["PACT"], snv_count: [3, 5],
     }, sourceRecords)).toEqual([]);
-    expect(search({ "coverage_qc.total_reads": [100, 105] })).toHaveLength(6);
+    expect(search({ "coverage_qc.total_reads": [100, 105] })).toHaveLength(8);
   });
 
   it("uses the full source extent, not the results of earlier filters", () => {

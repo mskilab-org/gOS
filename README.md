@@ -93,6 +93,8 @@ Available `viewType` renderers:
 
 **Cohort Filters:** Define dataset-specific filters for the cohort-level view using `schema`. When provided, this overrides the default schema from settings. Each filter must include `id`, `title`, and `type`.
 
+Active cohort metadata filters are skipped only when the metadata key is absent from the case record, including an absent nested key. A present key assigned `N/A`, null, a blank, an empty list, or an invalid value is evaluated normally; it does not bypass the filter. A nested parent assigned an unusable value (for example, `qc: null`) also does not bypass the filter. Source-schema restrictions still apply to present values. Untouched full-range sliders remain inactive. All other active filters still apply. This behavior covers single-dataset and all-accessible-dataset views, saved queries, and aggregations. Dataset, Pair, Patient ID, case-ID, tags, free-text, and interpretation filters remain strict.
+
 ### Report styles and primary-site choices
 
 Report presentation is selected by the dataset-level `reportStyle` property:
