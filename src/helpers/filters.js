@@ -1,6 +1,7 @@
 import * as d3 from "d3";
 import { getValueByPath, plotTypes, reportAttributesMap } from "./utility";
 import { getSpecimenDateExtent } from "./specimenDate";
+import { getNumericFilterExtent } from "./numericFilterExtent";
 import common from "../translations/en/common.json";
 import {
   getSourceScopedFieldValue,
@@ -307,9 +308,7 @@ export function getReportFilterExtents(reports) {
     let allValues = reports
       .map((record) => getValueByPath(record, filter.name))
       .flat();
-    extents[filter.name] = d3.extent(
-      allValues.filter((e) => !isNaN(e) && e !== null && e !== undefined)
-    );
+    extents[filter.name] = getNumericFilterExtent(allValues);
   });
   return extents;
 }
@@ -380,11 +379,7 @@ export function getReportsFilters(fields, reports, fieldContext = {}) {
         filter: field,
         records: [...distinctValues],
         frequencies: Object.fromEntries(frequencyMap),
-        extent: d3.extent(
-          distinctValues.filter(
-            (e) => !isNaN(e) && e !== null && e !== undefined
-          )
-        ),
+        extent: getNumericFilterExtent(distinctValues),
         totalRecords: applicableReports.length,
         format: field.format,
       });

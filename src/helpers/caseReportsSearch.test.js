@@ -4,6 +4,10 @@
 jest.mock("d3", () => ({
   ascending: (left, right) => (left < right ? -1 : left > right ? 1 : 0),
   descending: (left, right) => (left > right ? -1 : left < right ? 1 : 0),
+  extent: (values) =>
+    values.length > 0
+      ? [Math.min(...values), Math.max(...values)]
+      : [undefined, undefined],
 }));
 
 jest.mock("./utility", () => ({

@@ -5,6 +5,7 @@ import {
   orderListViewFilters,
 } from "./utility";
 import { reportFilters } from "./filters";
+import { getNumericFilterExtent } from "./numericFilterExtent";
 import {
   datasetHasField,
   getSourceScopedFieldValue,
@@ -235,6 +236,23 @@ export const filterCaseReportRecords = (
     }
 
     if (renderer === "slider" && Array.isArray(selectedValue)) {
+      // Reset can submit an empty extent, serialized as [null, null] when saved.
+      if (selectedValue.every((value) => value == null)) return;
+
+      // Match the form's full source extent, before any filters or visibility checks.
+      const extent = getNumericFilterExtent(
+        sourceRecords.map((record) => recordFieldValue(record, key)).flat(),
+      );
+      if (
+        selectedValue.length === 2 &&
+        extent[0] != null &&
+        Number(selectedValue[0]) === Number(extent[0]) &&
+        Number(selectedValue[1]) === Number(extent[1])
+      ) {
+        // Untouched sliders must not exclude datasets that omit the field.
+        return;
+      }
+
       records = records.filter((record) => {
         if (!recordHasField(record, key)) return false;
         const value = recordFieldValue(record, key);
