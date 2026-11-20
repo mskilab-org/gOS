@@ -526,6 +526,76 @@ describe("buildColumnConfig", () => {
     });
   });
 
+  describe("missing value ordering", () => {
+    const records = Object.freeze([
+      { uid: "real-mid", vaf: 0.2 },
+      { uid: "absent", vaf: undefined },
+      { uid: "real-low", vaf: 0.05 },
+      { uid: "real-string", vaf: "0.4992" },
+      { uid: "na-string", vaf: "NA" },
+      { uid: "null", vaf: null },
+    ].map(Object.freeze));
+
+    const sortBy = (column, order) =>
+      getTableReviewRecords(records, [{ ...column, sortOrder: order }]).map((record) => record.uid);
+
+    const vafColumn = () => buildColumnConfig(
+      { id: "vaf", title: "VAF", dataIndex: "vaf", type: "numeric", filterType: "range" },
+      records
+    );
+
+    test("ranks a missing VAF as -Infinity: first ascending, last descending", () => {
+      expect(sortBy(vafColumn(), "ascend")).toEqual([
+        "absent", "na-string", "null", "real-low", "real-mid", "real-string",
+      ]);
+      expect(sortBy(vafColumn(), "descend")).toEqual([
+        "real-string", "real-mid", "real-low", "absent", "na-string", "null",
+      ]);
+    });
+
+    test.each([undefined, null, "", "  ", "N/A", "na", "-", "invalid", NaN, Infinity]) (
+      "treats %p as missing exactly like the range filter's NA policy",
+      (vaf) => {
+        const column = vafColumn();
+        expect(column.sorter.compare({ vaf }, { vaf: 0.05 })).toBe(-1);
+        expect(column.sorter.compare({ vaf: 0.05 }, { vaf })).toBe(1);
+        expect(column.onFilter("0,1,exclude-na", { vaf })).toBe(false);
+      }
+    );
+
+    test("ranks missing text below present text and missing annotations below present ones", () => {
+      const geneRecords = [{ uid: "b", gene: "B" }, { uid: "absent" }, { uid: "a", gene: "A" }];
+      const geneColumn = buildColumnConfig({ id: "gene", title: "Gene", dataIndex: "gene" }, geneRecords);
+      expect(getTableReviewRecords(geneRecords, [{ ...geneColumn, sortOrder: "ascend" }])
+        .map((record) => record.uid)).toEqual(["absent", "a", "b"]);
+
+      const annotations = [
+        { uid: "pathogenic", alphaMissense: { class: "pathogenic", score: 0.9 } },
+        { uid: "benign", alphaMissense: { class: "benign", score: 0.1 } },
+        { uid: "absent" },
+      ];
+      const [annotationColumn] = buildColumnsFromSettings(
+        [], [{ id: "alphaMissense", title: "AlphaMissense", dataIndex: "alphaMissense", viewType: "class-icon" }], annotations
+      );
+      const annotationOrder = (order) => getTableReviewRecords(
+        annotations, [{ ...annotationColumn, sortOrder: order }]
+      ).map((record) => record.uid);
+      // Annotation scores sort descending, so the higher score still comes first.
+      expect(annotationOrder("ascend")).toEqual(["absent", "pathogenic", "benign"]);
+      expect(annotationOrder("descend")).toEqual(["benign", "pathogenic", "absent"]);
+    });
+
+    test("leaves real values in their existing order and does not mutate the records", () => {
+      const column = vafColumn();
+      expect(column.sorter.compare({ vaf: 0.05 }, { vaf: 0.4992 })).toBe(-1);
+      expect(column.sorter.compare({ vaf: "0.4992" }, { vaf: 0.05 })).toBe(1);
+      expect(column.sorter.compare({ vaf: 0.2 }, { vaf: "0.2" })).toBe(0);
+      const before = records.map((record) => record.uid);
+      sortBy(column, "descend");
+      expect(records.map((record) => record.uid)).toEqual(before);
+    });
+  });
+
   test("keeps nonnumeric filter values distinct", () => {
     const column = buildColumnConfig(
       {
