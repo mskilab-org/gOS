@@ -6,6 +6,10 @@ import {
   normalizeNumericFilterValue,
   parseNumericRangeFilter,
 } from "../../helpers/numericRangeFilter";
+import {
+  compareNullable,
+  compareNumericNullable,
+} from "../../helpers/nullableOrder";
 
 const DEFAULT_COLUMN_WIDTH = 120;
 const HEADER_NARROW_GLYPH_WIDTH = 6;
@@ -164,38 +168,40 @@ function buildSorter(dataIndex, dataType = "string") {
       const aVal = resolvePath(a, dataIndex);
       const bVal = resolvePath(b, dataIndex);
 
-      if (aVal == null) return 1;
-      if (bVal == null) return -1;
-
+      // Missing values rank as -Infinity: first ascending, last descending.
       if (dataType === "numeric") {
-        return d3.ascending(+aVal, +bVal);
+        return compareNumericNullable(aVal, bVal, d3.ascending);
       }
 
       if (dataType === "object") {
-        // Sort by score first (if available), then by class
-        const aScore = aVal?.score;
-        const bScore = bVal?.score;
-        const aHasScore = aScore !== undefined && aScore !== null;
-        const bHasScore = bScore !== undefined && bScore !== null;
-        
-        // Both have scores: sort by score descending
-        if (aHasScore && bHasScore) {
-          const scoreComp = d3.ascending(+bScore, +aScore); // descending
-          if (scoreComp !== 0) return scoreComp;
-        }
-        // One has score: score comes first
-        else if (aHasScore) return -1;
-        else if (bHasScore) return 1;
-        
-        // Neither has score or scores are equal: sort by class
-        const aClass = aVal?.class || "";
-        const bClass = bVal?.class || "";
-        return d3.ascending(aClass, bClass);
+        return compareNullable(aVal, bVal, compareAnnotations);
       }
 
-      return d3.ascending(aVal, bVal);
+      return compareNullable(aVal, bVal, d3.ascending);
     },
   };
+}
+
+/** Sort annotations by score first (if available), then by class. */
+function compareAnnotations(aVal, bVal) {
+  const aScore = aVal?.score;
+  const bScore = bVal?.score;
+  const aHasScore = aScore !== undefined && aScore !== null;
+  const bHasScore = bScore !== undefined && bScore !== null;
+
+  // Both have scores: sort by score descending
+  if (aHasScore && bHasScore) {
+    const scoreComp = d3.ascending(+bScore, +aScore); // descending
+    if (scoreComp !== 0) return scoreComp;
+  }
+  // One has score: score comes first
+  else if (aHasScore) return -1;
+  else if (bHasScore) return 1;
+
+  // Neither has score or scores are equal: sort by class
+  const aClass = aVal?.class || "";
+  const bClass = bVal?.class || "";
+  return d3.ascending(aClass, bClass);
 }
 
 /**
